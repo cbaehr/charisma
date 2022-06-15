@@ -6,6 +6,8 @@
 #install.packages('Hmisc')
 #install.packages('readstata13')
 
+setwd("/Users/christianbaehr/Documents/Github/charisma/ajps_replication")
+
 library(Hmisc)
 r = function(x) round(x, digits=3)
 #######################
