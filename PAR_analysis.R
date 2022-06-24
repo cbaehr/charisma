@@ -1,5 +1,4 @@
 
-set.seed(123)
 
 setwd("/Users/christianbaehr/Dropbox/charisma_project/data")
 
@@ -31,7 +30,12 @@ congress$voteshare_R_House_l1[congress$year==min(congress$year)] <- NA
 
 unique(congress$status_D_House)
 
-openseats <- congress[which(congress$status_D_House=="Challenger" & congress$status_R_House=="Challenger"), ]
+open <- congress[which(congress$status_D_House=="Challenger" & congress$status_R_House=="Challenger"), ]
+
+# year dummies
+years <- lapply(sort(unique(open$year))[-1], function(x) (open$year == x) * 1)
+yrdums <- paste0("Y", sort(unique(open$year))[-1])
+open[, yrdums] <- years
 
 # linear cubic spline for incumbency advantage
 
@@ -39,29 +43,83 @@ library(glmnet)
 
 ### DEM ###
 
-demo <- openseats[, c("voteshare_D_House", "voteshare_D_Pres", "voteshare_D_Gov",
-                      "gini", "mean_income", "pct_unemp", "pct_hsgrads", "pct_BAdegree", "pct_over60",
-                      "totalpop", "pct_black", "pct_hispanic", "pct_white",
-                      "voteshare_D_House_l1")]
+D <- open[, c("voteshare_D_House", "voteshare_D_Pres", "voteshare_D_Gov",
+              "gini", "mean_income", "pct_unemp", "pct_hsgrads", "pct_BAdegree", "pct_over60",
+              "totalpop", "pct_black", "pct_hispanic", "pct_white",
+              "voteshare_D_House_l1", yrdums)]
 
-demo <- na.omit(demo)
-rownames(demo) <- c(1:nrow(demo))
+R <- open[, c("voteshare_R_House", "voteshare_R_Pres", "voteshare_R_Gov",
+              "gini", "mean_income", "pct_unemp", "pct_hsgrads", "pct_BAdegree", "pct_over60",
+              "totalpop", "pct_black", "pct_hispanic", "pct_white",
+              "voteshare_R_House_l1", yrdums)]
 
-DT <- sample(rownames(demo), replace=F, size=0.6*nrow(demo))
-X_D_test <- as.matrix(demo[as.numeric(DT), -1])
-X_D_val <- as.matrix(demo[!rownames(demo) %in% DT, -1])
+D <- na.omit(D)
+R <- na.omit(R)
 
-y_D_test <- demo$voteshare_D_House[as.numeric(DT)]
-y_D_val <- demo$voteshare_D_House[!rownames(demo) %in% DT]
+X_D <- as.matrix(D[, -1])
+X_R <- as.matrix(R[, -1])
+
+y_D <- D[,1]
+y_R <- R[,1]
+
+lambda <- 10^seq(2, -5, -0.25)
+
+set.seed(1011)
 
 # ridge
-grid <-  10^seq(10, -2, length = 100)
-mod <- glmnet(X_D_test, y_D_test, alpha=0, lambda=grid)
+Ridge <- cv.glmnet(x=X_D, y=y_D, lambda=lambda, type.measure="mse", nfolds=5, 
+                   gamma=1, relax=F, alpha=0, standardize=T)
+#plot(Ridge)
+#coef(Ridge)
+
+#lasso
+Lasso <- cv.glmnet(x=X_D, y=y_D, lambda=lambda, type.measure="mse", nfolds=5, 
+                   gamma=1, relax=F, alpha=1, standardize=T)
+#plot(Lasso)
 
 
+pdf("../results/PARmse_Dem.pdf", width=11, height=6)
+par(mfrow=c(1,2))
+plot(Ridge)
+mtext("Ridge",side=3,line=0,outer=F,cex=1.3, padj=-3.2)
+plot(Lasso, ylab="")
+mtext("Lasso",side=3,line=0,outer=F,cex=1.3, padj=-3.2)
+dev.off()
+
+#Lasso_relax <- cv.glmnet(x=X_D, y=y_D, lambda=lambda, type.measure="mse", nfolds=5, relax=T, alpha=1)
+#plot(Lasso_relax)
+
+lambda <- exp(-6.5)
+
+mod <- glmnet(x=X_D, y=y_D, lambda=exp(-2.5), alpha=0)
+
+pred <- mod$a0 +  X_D %*% mod$beta
+
+openD <- open[rownames(D), ]
+openD$PAR_D <- as.vector(pred)
+openD$PARerror <- openD$voteshare_D_House - openD$PAR_D
+openD <- openD[order(openD$PARerror, decreasing=T), ]
 
 
+#View(openD[, c("year", "state", "district", "cand_D_House", "voteshare_D_House", "PAR_D", "PARerror")])
+write.csv(openD[, c("year", "state", "district", "cand_D_House", "voteshare_D_House", "PAR_D", "PARerror")],
+          "../results/PARdata_Dem.csv",
+          row.names=F)
 
+write.csv(data.frame(var=rownames(mod$beta), beta=as.vector(round(mod$beta, digits=4))),
+          "../results/PARbetas_Dem.csv",
+          row.names=F)
+
+#install.packages("magick")
+#webshot::install_phantomjs()
+library(modelsummary)
+#library(sandwich)
+#library(lmtest)
+
+#cols <- !grepl("Y", names(openD))
+#f_summary <- All(openD[,cols]) ~ N+Mean+SD+Median+Min+P25+P75+Max
+f_summary <- All(D) ~ N+Mean+SD+Median+Min+P25+P75+Max
+datasummary(formula=f_summary, data=D, output="../results/sum_stats_Dem.tex")
 
 
 
