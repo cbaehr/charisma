@@ -37,6 +37,14 @@ years <- lapply(sort(unique(open$year))[-1], function(x) (open$year == x) * 1)
 yrdums <- paste0("Y", sort(unique(open$year))[-1])
 open[, yrdums] <- years
 
+open$decade <- open$year - open$year %% 10
+decades <- model.matrix(~factor(open$decade)+0)
+colnames(decades) <- substr(colnames(decades), nchar(colnames(decades))-3, nchar(colnames(decades)))
+colnames(decades) <- paste0("D", colnames(decades))
+open[, colnames(decades)] <- decades
+
+
+
 # linear cubic spline for incumbency advantage
 
 library(glmnet)
@@ -46,12 +54,43 @@ library(glmnet)
 D <- open[, c("voteshare_D_House", "voteshare_D_Pres", "voteshare_D_Gov",
               "gini", "mean_income", "pct_unemp", "pct_hsgrads", "pct_BAdegree", "pct_over60",
               "totalpop", "pct_black", "pct_hispanic", "pct_white",
-              "voteshare_D_House_l1", yrdums)]
+              "voteshare_D_House_l1", yrdums, colnames(decades))]
+D_names <- names(D)[-1]
+
+D_s <- data.frame(apply(D[ , D_names], 2, function(x) x^2))
+D_c <- data.frame(apply(D[ , D_names], 2, function(x) x^3))
+names(D_s) <- paste0(D_names, "_sq")
+names(D_c) <- paste0(D_names, "_cu")
+D <- do.call(cbind, list(D, D_s, D_c))
+
+interactions <- combn(names(D)[-1], 2, FUN=paste, collapse='*')
+
+for(i in interactions) {
+  nms <- strsplit(i, "\\*")[[1]]
+  D[, i] <- D[, nms[1]] * D[, nms[2]]
+}
+
+
+
 
 R <- open[, c("voteshare_R_House", "voteshare_R_Pres", "voteshare_R_Gov",
               "gini", "mean_income", "pct_unemp", "pct_hsgrads", "pct_BAdegree", "pct_over60",
               "totalpop", "pct_black", "pct_hispanic", "pct_white",
               "voteshare_R_House_l1", yrdums)]
+R_names <- names(R)[-1]
+
+R_s <- data.frame(apply(R[ , R_names], 2, function(x) x^2))
+R_c <- data.frame(apply(R[ , R_names], 2, function(x) x^3))
+names(R_s) <- paste0(R_names, "_sq")
+names(R_c) <- paste0(R_names, "_cu")
+R <- do.call(cbind, list(R, R_s, R_c))
+
+interactions <- combn(names(R)[-1], 2, FUN=paste, collapse='*')
+
+for(i in interactions) {
+  nms <- strsplit(i, "\\*")[[1]]
+  R[, i] <- R[, nms[1]] * R[, nms[2]]
+}
 
 D <- na.omit(D)
 R <- na.omit(R)
@@ -62,13 +101,56 @@ X_R <- as.matrix(R[, -1])
 y_D <- D[,1]
 y_R <- R[,1]
 
+prep <- function(x, y) {
+  dum <- sample(c(T,F), size=nrow(x), prob=c(.6,.4), replace=T)
+  return(list(test.x=x[dum, ], test.y=y[dum], valid.x=x[!dum, ], valid.y=y[!dum]))
+}
+D_part <- prep(X_D, y_D)
+R_part <- prep(X_R, y_R)
+
+#rm(list = setdiff(ls(), "D_part"))
+
+
 lambda <- 10^seq(2, -5, -0.25)
 
 set.seed(1011)
 
+
 # ridge
-Ridge <- cv.glmnet(x=X_D, y=y_D, lambda=lambda, type.measure="mse", nfolds=5, 
-                   gamma=1, relax=F, alpha=0, standardize=T)
+Ridge <- glmnet(x=D_part$test.x, y=D_part$test.y, family="gaussian", alpha=0, lambda=lambda, standardize=T)
+plot(Ridge)
+
+View(Ridge)
+
+matbeta <- as.matrix(Ridge$beta)
+b <- matbeta[, 1]
+
+SQdev <- apply(matbeta, 2, function(B) { (( D_part$valid.x %*% B ) - D_part$valid.y) ^ 2 })
+mu <- apply(SQdev, 2, function(x) mean(x))
+
+# use sum instead of mean?
+se <- apply(SQdev, 2, function(x) {sqrt( sum((x - mean(x)) ^ 2) / (length(x)-1))})
+# cvsd=with(cvstuff, sqrt(apply(scale(cvraw, cvm, FALSE)^2, 2, weighted.mean,
+#                               w = weights, na.rm = TRUE)/(N - 1)))
+
+mse <- data.frame(lambda=log(Ridge$lambda), MSE=mu, LSE=mu-se, USE=mu+se)
+
+plot(mse$lambda, mse$MSE, ylim=c(min(mse$LSE), max(mse$USE)), pch=20, col="red")
+apply(mse, 1, 
+      function(a) {
+        lines(x=rep(a[1], 2), y=c(a[3], a[4]), col="gray")
+        lines(x=c(a[1]-0.1, a[1]+0.1), y=rep(a[4], 2), col="gray")
+        lines(x=c(a[1]-0.1, a[1]+0.1), y=rep(a[3], 2), col="gray")
+      })
+par(new=T)
+plot(mse$lambda, mse$MSE, ylim=c(min(mse$LSE), max(mse$USE)), pch=20, col="red")
+
+
+
+
+
+# Ridge <- cv.glmnet(x=X_D, y=y_D, lambda=lambda, type.measure="mse", nfolds=5, 
+#                    gamma=1, relax=F, alpha=0, standardize=T)
 #plot(Ridge)
 #coef(Ridge)
 
@@ -86,7 +168,7 @@ plot(Lasso, ylab="")
 mtext("Lasso",side=3,line=0,outer=F,cex=1.3, padj=-3.2)
 dev.off()
 
-#Lasso_relax <- cv.glmnet(x=X_D, y=y_D, lambda=lambda, type.measure="mse", nfolds=5, relax=T, alpha=1)
+Lasso_relax <- cv.glmnet(x=X_D, y=y_D, lambda=lambda, type.measure="mse", nfolds=5, relax=T, alpha=1)
 #plot(Lasso_relax)
 
 lambda <- exp(-6.5)
