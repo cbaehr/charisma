@@ -217,5 +217,23 @@ test <- aggregate(countyplusname$con_district, by=list(countyplusname$year, coun
 
 write.csv(countyplusname, "../condistrict_to_county_mapping_withcountynames.csv", row.names=F)
 
+###
+
+countyplusname$testvar <- paste(countyplusname$state, countyplusname$county)
+
+test1992 <- table(countyplusname$testvar[countyplusname$year==1992])
+mean(test1992 > 1)
+
+test2002 <- table(countyplusname$testvar[countyplusname$year==2002])
+mean(test2002 > 1)
+
+test2012 <- table(countyplusname$testvar[countyplusname$year==2012])
+mean(test2012 > 1)
+
+out <- data.frame(congress = c("1992-2002", "2002-2012", "2012-2020"),
+                  pct_counties_in_multiple_districts = c(mean(test1992 > 1), mean(test2002 > 1), mean(test2012 > 1)))
+
+#write.csv(out, "/Users/christianbaehr/Desktop/countystats.csv", row.names = F)
+xtable::xtable(out)
 
 
