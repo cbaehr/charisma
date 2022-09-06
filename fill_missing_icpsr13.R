@@ -1,4 +1,6 @@
 
+setwd("/Users/christianbaehr/Dropbox/charisma_project/data")
+
 library(sf)
 library(haven)
 
@@ -6,23 +8,25 @@ sf_use_s2(F)
 
 #dat <- data.frame(read_dta("/Users/christianbaehr/Dropbox/charisma_project/codes-from-Rocio-APSR-county-analysis/counties/output/counties.dta"))
 
-dat <- data.frame(read_dta("/Users/christianbaehr/Dropbox/charisma_project/codes-from-Rocio-APSR-county-analysis/counties/output/icpsr13_final.dta"))
+dat <- data.frame(read_dta("../codes-from-Rocio-APSR-county-analysis/counties/output/icpsr13_final.dta"))
 # order by year - will reduce the number of times we have to load senate data in to the loop
 dat <- dat[order(dat$year), ]
 
 # only keep observations on regular Congressional election years
-dat <- dat[which(dat$year %in% seq(1950, 1990, 2)), ]
+#dat <- dat[which(dat$year %in% seq(1950, 1990, 2)), ]
+dat <- dat[which(dat$year %in% seq(1952, 1982, 10)), ] # actually just once a decade
 
-dat$cd[dat$statenm=="Alaska"] <- 1 # Alaska only has a single congressional district
+#dat$cd[dat$statenm=="Alaska"] <- 1 # Alaska only has a single congressional district
+dat <- dat[which(dat$statenm != "Alaska"), ]
 
 dat <- dat[which(dat$countynm!="OAHU"), ]
 dat <- dat[which(dat$countynm!="ORANGE/MOSQUITO"), ] # omit these because I cant find the corresponding county in the shapefile
 #dat$countynm[which(dat$year>1972 & dat$countynm=="OAHU")] <- "HONOLULU"
 
 # read in CQ data for all years 
-cq <- do.call(rbind, list(read.csv("/Users/christianbaehr/Dropbox/charisma_project/data/congressdata/congressdata_1944-1960.csv", stringsAsFactors = F, skip=2),
-                          read.csv("/Users/christianbaehr/Dropbox/charisma_project/data/congressdata/congressdata_1962-1980.csv", stringsAsFactors = F, skip=2),
-                          read.csv("/Users/christianbaehr/Dropbox/charisma_project/data/congressdata/congressdata_1982-2000.csv", stringsAsFactors = F, skip=2)))
+cq <- do.call(rbind, list(read.csv("congressdata/congressdata_1944-1960.csv", stringsAsFactors = F, skip=2),
+                          read.csv("congressdata/congressdata_1962-1980.csv", stringsAsFactors = F, skip=2),
+                          read.csv("congressdata/congressdata_1982-2000.csv", stringsAsFactors = F, skip=2)))
 cq$Area <- as.numeric(gsub("District ", "", cq$Area))
 cq$Area[cq$State=="Alaska"] <- 1 # Alaska has only one CD
 
@@ -37,14 +41,14 @@ cq$Area[cq$State=="Alaska"] <- 1 # Alaska has only one CD
 # when necessary
 cong <- list()
 for(i in unique(dat$year)) {
-  temp <- st_read(paste0("/Users/christianbaehr/Downloads/cd_boundaries/", i), stringsAsFactors = F)
+  temp <- st_read(paste0("cd_boundaries/", i), stringsAsFactors = F)
   temp <- temp[which(temp$DISTRICT != 0), ] # drop districts with district number 0
   cong[[as.character(i)]] <- st_transform(temp, crs=4326) # transform shapefile CRS to 4326
   
 }
 
 # load county shapefile
-county <- st_read("/Users/christianbaehr/Downloads/US_AtlasHCB_Counties_Gen0001/US_HistCounties_Gen0001_Shapefile/US_HistCounties_Gen0001.shp", stringsAsFactors=F)
+county <- st_read("US_AtlasHCB_Counties_Gen0001/US_HistCounties_Gen0001_Shapefile/US_HistCounties_Gen0001.shp", stringsAsFactors=F)
 # create area variable in squared km
 county$county_area <- as.numeric(st_area(county$geometry)) / 1000000
 
@@ -54,9 +58,10 @@ county$NAME[which(county$NAME=="Baltimore City (IC)")] <- "BALTIMORE CITY"
 county$NAME[which(county$NAME=="DEKALB")] <- "DE KALB"
 county$NAME[which(county$NAME=="DESOTO")] <- "DE SOTO"
 county$NAME[which(county$NAME=="Lynchburg (IC)")] <- "LYNCHBURG"
-county$NAME[which(county$NAME=="VIRGINIA BEACH (IC)")] <- "VIRGINIA BEACH"
+county$NAME[which(county$NAME=="Virginia Beach (IC)")] <- "VIRGINIA BEACH"
 county$NAME[which(county$NAME=="MANASSAS PARK (IC)")] <- "MANASSAS"
 county$NAME[which(county$NAME=="DOÑA ANA")] <- "DONA ANA"
+
 #county$NAME[which(county$NAME=="ORANGE/MOSQUITO")] <- "ORANGE"
 
 #sort(unique(county$NAME[county$STATE_TERR=="Alaska"]))
@@ -98,7 +103,8 @@ for( i in 1:nrow(dat) ) {
       if(dat$cd[i] == 999 ) { # CD is missing according to Census
         
         #keep <- int[which.max(int$county_proportion), ]
-        keep <- int$county_prop > 0.05 # only keep those cases with >5% of the county in the district
+        #keep <- int$county_prop > 0.05 # only keep those cases with >5% of the county in the district
+        keep <- int$county_prop > 0.001 # only keep those cases with >0.1% of the county in the district
         int <- int[which(keep), ]
         row <- dat[rep(i, nrow(int)), ]
         row$replaceid <- 3 # replacing a previously missing CD id
@@ -125,7 +131,8 @@ for( i in 1:nrow(dat) ) {
           n <- 5
         }
         
-        if(any(int$county_prop[!keep] > 0.05)) {stop("MAY BE SKIPPING A RELEVANT COUNTY")}
+        #if(any(int$county_prop[!keep] > 0.05)) {stop("MAY BE SKIPPING A RELEVANT COUNTY")}
+        if(any(int$county_prop[!keep] > 0.001)) {stop("MAY BE SKIPPING A RELEVANT COUNTY")}
         int <- int[which(keep), ]
         row <- dat[rep(i, n), ]
         row$replaceid <- 2 # filling in CDs for counties that cross multiple
@@ -145,7 +152,8 @@ for( i in 1:nrow(dat) ) {
       int <- int[which(int$STATENAME==int$STATE_TERR), ]
       int$unit_area <- as.numeric(st_area(int$geometry)) / 1000000
       int$county_prop <- int$unit_area / int$county_area # proportion of the county that is in this district
-      keep <- int$county_prop > 0.05 # only keep those cases with >5% of the county in the district
+      #keep <- int$county_prop > 0.05 # only keep those cases with >5% of the county in the district
+      keep <- int$county_prop > 0.001 # only keep those cases with >0.1% of the county in the district
       int <- int[which(keep), ]
       
       if(nrow(int)>0) { # in some states all of the elections are essentially at-large, and the district shapefiles from those states are omitted so there is no intersection
@@ -178,20 +186,20 @@ for( i in 1:nrow(dat) ) {
 }
 
 datout <- do.call(rbind, datnew)
-write.csv(datout, "/Users/christianbaehr/Desktop/output.csv", row.names=F)
+datout <- datout[, c("year", "statenm", "state", "countynm", "county", "cd", "replaceid", "county_prop")]
 
-test <- aggregate(datout$cd, by=list(datout$year, datout$statenm), FUN=function(x) length(x))
+write.csv(datout, "condistrict_to_county_mapping_withcountynames_1952-82.csv", row.names=F)
 
-table(datout$statenm[datout$replaceid==-2])
+###
 
-View(datout[datout$statenm=="Alabama" & datout$year==1970, ])
-View(datout[datout$statenm=="Alabama" & datout$year==1976, ])
+#datout$countynm[which(datout$countynm=="CARSON" & datout$statenm=="Nevada")] <- "CARSON CITY"
+#datout$county[which(datout$countynm=="CARSON CITY" & datout$statenm=="Nevada")] <- 510
 
-test2 <- datout[!((duplicated(datout[, c(1:6)]) | duplicated(datout[, c(1:6)], fromLast=T)) & is.na(datout$pre_dem)), ]
-test2 <- test2[test2$year %in% c(1952, 1962, 1972, 1982), ]
-testearly <- aggregate(test2$cd, by=list(test2$year, test2$statenm), FUN=function(x) length(x))
+#datout$county[which(datout)]
 
-View(datout[datout$replaceid==-2, ])
+#which(datout$county==510 & datout$statenm=="Nevada")
+
+#View(datout[datout$replaceid==-2, ])
 table(datout$replaceid)
 
 # -2 implies CDs for which we have a missing state shapefile (I assume these are mostly at large)
@@ -202,9 +210,16 @@ table(datout$replaceid)
 # 3 implies replacing a previously missing CD code
 
 table(datout$statenm[datout$replaceid==-1])
-View(datout[datout$replaceid==-1 & datout$statenm=="Wisconsin", ])
+#View(datout[datout$replaceid==-1 & datout$statenm=="Wisconsin", ])
 
-#dattest <- datout[sample(c(1:nrow(datout)), 5), ]
+# CODE TO PRODUCE TABLE OF CD-COUNTY PAIRS BY STATE BY YEAR
+
+test <- aggregate(datout$cd, by=list(datout$year, datout$statenm), FUN=function(x) length(x))
+
+test2 <- datout[!((duplicated(datout[, c(1:6)]) | duplicated(datout[, c(1:6)], fromLast=T)) & is.na(datout$pre_dem)), ]
+test2 <- test2[test2$year %in% c(1952, 1962, 1972, 1982), ]
+testearly <- aggregate(test2$cd, by=list(test2$year, test2$statenm), FUN=function(x) length(x))
+
 
 latedat <- read.csv("/Users/christianbaehr/Dropbox/charisma_project/data/condistrict_to_county_mapping_withcountynames.csv", stringsAsFactors = F)
 testlate <- aggregate(latedat$con_district, by=list(latedat$year, latedat$state), FUN=function(x) length(x))
@@ -217,31 +232,3 @@ names(fulltest) <- c("state", seq(1952, 2012, 10))
 print(xtable::xtable(fulltest, type = "latex"))
 
 
-View(fulltest[order(fulltest$Group.2, fulltest$Group.1), ])
-
-# temp <- read.csv("/Users/christianbaehr/Dropbox/charisma_project/data/congressdata/congressdata_1962-1980.csv",
-#                  stringsAsFactors = F, skip=2)
-# unique(temp$Area[temp$raceYear==1972 & temp$State=="California"])
-# districts1972 <- st_read("/Users/christianbaehr/Downloads/districtShapes-10/districts094.shp", stringsAsFactors=F)
-# unique(districts1972$DISTRICT[districts1972$STATENAME=="California"])
-# 
-# # CQ and GIS data both agree on district names for CA, but ICPSR 13 has LA in district 67 in 1972 which doesnt exist
-# 
-# dat$cd > 900
-# 
-# View(dat[dat$cd==999, ])
-# 
-# View(dat[which(dat$cd==902), ])
-# 
-# View(dat[which(dat$cd==918), ])
-# View(dat[which(dat$cd==914), ])
-# 
-# View(dat[which(dat$cd==99), ])
-# 
-# library(sf)
-# cong1985 <- st_read("/Users/christianbaehr/Downloads/districtShapes-9/districts099.shp", stringsAsFactors=F)
-# 
-# 
-# county <- st_read("/Users/christianbaehr/Downloads/US_AtlasHCB_Counties_Gen0001/US_HistCounties_Gen0001_Shapefile/US_HistCounties_Gen0001.shp", stringsAsFactors=F)
-# 
-# county1985 <- county[which(county$START_N<=19850509 & county$END_N>=19850509), ]
