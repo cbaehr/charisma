@@ -215,7 +215,7 @@ countyplusname <- merge(allyears, fips[, c("name", "fipschar")], by.x="fips", by
 test <- aggregate(countyplusname$con_district, by=list(countyplusname$year, countyplusname$state), FUN=function(x) length(unique(x)))
 # LOOKS GOOD!
 
-write.csv(countyplusname, "../condistrict_to_county_mapping_withcountynames.csv", row.names=F)
+write.csv(countyplusname, "../condistrict_to_county_mapping_withcountynames_1992-2012.csv", row.names=F)
 
 ###
 
