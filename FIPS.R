@@ -1,4 +1,6 @@
-install.packages(c('tibble', 'dplyr', 'readr'))
+#install.packages(c('tibble', 'dplyr', 'readr'))
+
+setwd("/Users/christianbaehr/Dropbox/charisma_project/data")
 
 rocio1 <- read.csv("condistrict_to_county_mapping_withcountynames_1952-82.csv")
 rocio2 <- read.csv("condistrict_to_county_mapping_withcountynames_1992-2012.csv")
@@ -24,11 +26,15 @@ summary(is.na(result$fips)) ## 272 rows with missing fips
 
 
 ####combining result and rocio2
-rocio2 <- rocio2[, c("countynm","statenm", "year" , "statefips", "county" , "con_district","fips" )]
+rocio2 <- rocio2[, c("countynm","statenm", "year" , "statefips", "county" , "con_district", "fips", "unit_pop", "countypop", "unit_weight")]
 colnames(rocio2)[4] <- "state" 
 colnames(rocio2)[6] <- "cd"
 
-result <- subset(result, select=c( "countynm", "statenm",  "year", "state", "county", "cd","fips"))
+names(result)[names(result)=="county_prop"] <- "unit_weight"
+result$unit_pop <- NA
+result$countypop <- NA
+
+result <- subset(result, select=c( "countynm", "statenm",  "year", "state", "county", "cd","fips", "unit_pop", "countypop", "unit_weight"))
 
 merged <- rbind(result, rocio2) ## 24401 obs in total
 write.csv(merged, "condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv")
@@ -62,3 +68,43 @@ summary1<- missingfips %>%
   summarise(n = n())
 
 summary2<- dcast(summary1, summary1$`missingfips$statenm`~ summary1$`missingfips$year`)
+
+
+##########
+
+dat <- read.csv("/Users/christianbaehr/Dropbox/charisma_project/data/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv", stringsAsFactors = F)
+
+dat$cd <- as.numeric(dat$cd)
+
+out <- aggregate(dat$countynm, by=list(dat$year, dat$statenm, dat$cd), FUN=function(x) length(unique(x)))
+
+stateout <- aggregate(out$x, by=list(out$Group.1, out$Group.2), FUN=function(x) sum(!x>1)*100/length(x))
+stateout$x <- paste0(round(stateout$x))
+
+fulltest <- reshape(stateout, direction="wide", idvar=c("Group.2"), timevar="Group.1")
+rownames(fulltest) <- seq_len(nrow(fulltest))
+
+names(fulltest) <- c("state", seq(1952, 2012, 10))
+print(xtable::xtable(fulltest, type = "latex"))
+
+###
+
+dat$dupcounty <- duplicated(dat[, c("countynm", "statenm", "year")])
+
+out <- aggregate(dat$dupcounty, by=list(dat$year, dat$statenm, dat$cd), FUN=function(x) sum(x) > 0)
+
+stateout <- aggregate(out$x, by=list(out$Group.1, out$Group.2), FUN=function(x) sum(x)*100/length(x))
+stateout$x <- paste0(round(stateout$x))
+
+
+fulltest <- reshape(stateout, direction="wide", idvar=c("Group.2"), timevar="Group.1")
+rownames(fulltest) <- seq_len(nrow(fulltest))
+
+names(fulltest) <- c("state", seq(1952, 2012, 10))
+
+print(xtable::xtable(fulltest, type = "latex"))
+
+
+
+
+
