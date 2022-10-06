@@ -28,7 +28,7 @@ cq <- do.call(rbind, list(read.csv("congressdata/congressdata_1944-1960.csv", st
                           read.csv("congressdata/congressdata_1962-1980.csv", stringsAsFactors = F, skip=2),
                           read.csv("congressdata/congressdata_1982-2000.csv", stringsAsFactors = F, skip=2)))
 cq$Area <- as.numeric(gsub("District ", "", cq$Area))
-cq$Area[cq$State=="Alaska"] <- 1 # Alaska has only one CD
+cq$Area[which(cq$State=="Alaska")] <- 1 # Alaska has only one CD
 
 # for the 999 cases, can use the GIS files to identify the congressional district each county lies in. Do a spatial intersection and then keep whichever
 # observation the vast majority of the county lies in

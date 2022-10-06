@@ -17,7 +17,28 @@ county$county_pop <- temp$countypop
 # these either represent at large elections or district numbers that do not actually exist
 # but North Dakota only has one congressional district, so we can assume all weights are 1
 
+###
+
+## COUNTIES IN SINGLE DISTRICT STATES SHOULD HAVE FULL WEIGHT
+
 county$unit_weight[which(county$cd==52 & county$statenm=="North Dakota")] <- 1
+
+county$unit_weight[which(county$statenm=="Vermont")] <- 1
+county$cd[which(county$statenm=="Vermont")] <- "At Large"
+
+county$unit_weight[which(county$statenm=="Wyoming")] <- 1
+county$cd[which(county$statenm=="Wyoming")] <- "At Large"
+
+county$unit_weight[which(county$statenm=="North Dakota" & county$year>=1972)] <- 1
+county$cd[which(county$statenm=="North Dakota" & county$year>=1972)] <- "At Large"
+
+county$unit_weight[which(county$statenm=="South Dakota" & county$year>=1982)] <- 1
+county$cd[which(county$statenm=="South Dakota" & county$year>=1982)] <- "At Large"
+
+# drop the remaining at-large cases with no unit weight. These won't be factored into the final data anyway.
+county <- county[!is.na(county$unit_weight), ]
+
+###
 
 county$statenm <- tolower(county$statenm)
 county$countynm <- tolower(county$countynm)
