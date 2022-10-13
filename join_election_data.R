@@ -5,13 +5,14 @@ library(readxl)
 
 ###
 
-county <- read.csv("condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_nomissingness.csv", stringsAsFactors = F)
+#county <- read.csv("condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_nomissingness.csv", stringsAsFactors = F)
+county <- read.csv("condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv", stringsAsFactors = F)
 
-temp <- read.csv("condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv", stringsAsFactors = F)
+#temp <- read.csv("condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv", stringsAsFactors = F)
 
-county$unit_weight <- temp$unit_weight # missing geographic weights for 820 cases
-county$unit_pop <- temp$unit_pop # missing unit populations for 1952-82. Will use the geographic weights 
-county$county_pop <- temp$countypop
+#county$unit_weight <- temp$unit_weight # missing geographic weights for 820 cases
+#county$unit_pop <- temp$unit_pop # missing unit populations for 1952-82. Will use the geographic weights 
+#county$county_pop <- temp$countypop
 
 # missing unit weights for 820 cases. All of these cases were coded in congressional district (52, 96, 98, 99)
 # these either represent at large elections or district numbers that do not actually exist
@@ -45,6 +46,8 @@ county$countynm <- tolower(county$countynm)
 county$countynm <- gsub("\\.", "", county$countynm)
 
 county$decade <- county$year
+
+county$cd <- as.numeric(county$cd)
 
 county$countynm[which(county$statenm=="alabama" & county$countynm=="calhoun/benton")] <- "calhoun"
 county$countynm[which(county$statenm=="alabama" & county$countynm=="chilton/baker")] <- "chilton"
@@ -97,7 +100,6 @@ congress$raceYear <- as.numeric(congress$raceYear)
 dfloor <- function(x) {
   return(((x-2) %/% 10) *10 + 2)
 }
-
 congress$decade <- dfloor(congress$raceYear)
 
 congress <- congress[which(!(congress$RepCandidate=="Letlow, Luke J." & congress$DemStatus=="N/A")),]
@@ -113,6 +115,9 @@ names(congress) <- c("statenm", "cd", "decade",
                      paste0("con_", c("raceYear", "RepVotes", "DemVotes", "ThirdVotes", "OtherVotes",
                                       "PluralityVotes", "RepVotesMajorPercent", "DemVotesMajorPercent", "ThirdVotesTotalPercent",
                                       "RepCandidate", "RepStatus", "DemCandidate", "DemStatus", "ThirdCandidate", "ThirdStatus")))
+
+congress$con_RepUnopposed <- congress$con_RepVotes=="Unopposed"
+congress$con_DemUnopposed <- congress$con_DemVotes=="Unopposed"
 
 countyplus <- merge(county, congress, by = c("statenm", "cd", "decade"), all.y=T)
 
@@ -192,6 +197,9 @@ senate$countynm <- trimws(senate$countynm)
 
 senate$RaceDate <- as.numeric(senate$RaceDate)
 senate$RaceDate <- as.numeric(substr(senate$RaceDate, 1, 4))
+
+senate$RepUnopposed <- senate$RepVotes=="Unopposed"
+senate$DemUnopposed <- senate$DemVotes=="Unopposed"
 
 drop <- (duplicated(senate[, c("statenm", "countynm", "RaceDate")])|duplicated(senate[, c("statenm", "countynm", "RaceDate")], fromLast = T)) & (senate$RepVotes=="N/A" & senate$DemVotes=="N/A") & (senate$statenm %in% c("georgia", "alaska"))
 senate <- senate[which(!drop), ]
@@ -273,24 +281,24 @@ senate_seat2 <- merge(seatyears2, senate, by.x=c("state", "year"), by.y=c("state
 senate_seat1 <- senate_seat1[, c("state", "countynm", "year", "RepVotes", "DemVotes", "ThirdVotes", "OtherVotes", 
                                  "PluralityVotes", "RepVotesMajorPercent", "DemVotesMajorPercent", "ThirdVotesTotalPercent",
                                  "RepCandidate", "RepStatus", "DemCandidate", "DemStatus", "PluralityParty", "ThirdParty", 
-                                 "ThirdCandidate", "ThirdStatus")]
+                                 "ThirdCandidate", "ThirdStatus", "RepUnopposed", "DemUnopposed")]
 
 names(senate_seat1) <- c("statenm", "countynm",
                          paste0("sen1_", c("RaceDate", "RepVotes", "DemVotes", "ThirdVotes", "OtherVotes", "PluralityVotes", 
                                            "RepVotesMajorPercent", "DemVotesMajorPercent", "ThirdVotesTotalPercent",
                                            "RepCandidate", "RepStatus", "DemCandidate", "DemStatus", "PluralityParty", 
-                                           "ThirdParty", "ThirdCandidate", "ThirdStatus")))
+                                           "ThirdParty", "ThirdCandidate", "ThirdStatus", "RepUnopposed", "DemUnopposed")))
 
 senate_seat2 <- senate_seat2[, c("state", "countynm", "year", "RepVotes", "DemVotes", "ThirdVotes", "OtherVotes", 
                                  "PluralityVotes", "RepVotesMajorPercent", "DemVotesMajorPercent", "ThirdVotesTotalPercent",
                                  "RepCandidate", "RepStatus", "DemCandidate", "DemStatus", "PluralityParty", "ThirdParty", 
-                                 "ThirdCandidate", "ThirdStatus")]
+                                 "ThirdCandidate", "ThirdStatus", "RepUnopposed", "DemUnopposed")]
 
 names(senate_seat2) <- c("statenm", "countynm",
                          paste0("sen2_", c("RaceDate", "RepVotes", "DemVotes", "ThirdVotes", "OtherVotes", "PluralityVotes", 
                                            "RepVotesMajorPercent", "DemVotesMajorPercent", "ThirdVotesTotalPercent",
                                            "RepCandidate", "RepStatus", "DemCandidate", "DemStatus", "PluralityParty", 
-                                           "ThirdParty", "ThirdCandidate", "ThirdStatus")))
+                                           "ThirdParty", "ThirdCandidate", "ThirdStatus", "RepUnopposed", "DemUnopposed")))
 
 countyplus <- merge(countyplus, senate_seat1, by.x=c("statenm", "countynm", "con_raceYear"),
                     by.y=c("statenm", "countynm", "sen1_RaceDate"), all.x=T) # need to pull forward the senate results from prior year
@@ -344,57 +352,72 @@ countyplus <- merge(countyplus, governor, by.x=c("statenm", "countynm", "con_rac
 unique(countyplus$fips[nchar(countyplus$fips)==4])
 countyplus$fips <- ifelse(nchar(countyplus$fips)==4, paste0("0", countyplus$fips), countyplus$fips)
 
-for(i in 1980:1989) {
-  if(i == 1980) {temp <- list()}
-  pop1980 <- read_xls("/Users/christianbaehr/Downloads/pe-02.xls", skip = 5, sheet = as.character(i))
-  pop1980 <- pop1980[-1, ]
-  
-  pop1980$pop <- apply(pop1980[, !names(pop1980) %in% c("Year of Estimate", "FIPS State and County Codes", "Race/Sex Indicator")],
-                       1, FUN=function(x) sum(x))
-  
-  pop1980$sex <- ifelse(grepl("female", pop1980$`Race/Sex Indicator`), "female", "male")
-  pop1980$race <- ifelse(grepl("Black", pop1980$`Race/Sex Indicator`), "black",
-                         ifelse(grepl("White", pop1980$`Race/Sex Indicator`), "white", "other"))
-  
-  pop1980 <- pop1980[,c("Year of Estimate", "FIPS State and County Codes", "race", "sex", "pop")]
-  names(pop1980) <- c("year", "fips", "race", "sex", "pop")
-  pop1980 <- data.frame(pop1980)
-  
-  pop1980 <- reshape(pop1980, direction = "wide", idvar=c("year", "fips", "race"), timevar = "sex")
-  pop1980 <- reshape(pop1980, direction = "wide", idvar=c("year", "fips"), timevar = "race")
-  temp[[as.character(i)]] <- pop1980
-  
-}
-pop1980 <- do.call(rbind, temp)
+# for(i in 1980:1989) {
+#   if(i == 1980) {temp <- list()}
+#   pop1980 <- read_xls("/Users/christianbaehr/Downloads/pe-02.xls", skip = 5, sheet = as.character(i))
+#   pop1980 <- pop1980[-1, ]
+#   
+#   pop1980$pop <- apply(pop1980[, !names(pop1980) %in% c("Year of Estimate", "FIPS State and County Codes", "Race/Sex Indicator")],
+#                        1, FUN=function(x) sum(x))
+#   
+#   pop1980$sex <- ifelse(grepl("female", pop1980$`Race/Sex Indicator`), "female", "male")
+#   pop1980$race <- ifelse(grepl("Black", pop1980$`Race/Sex Indicator`), "black",
+#                          ifelse(grepl("White", pop1980$`Race/Sex Indicator`), "white", "other"))
+#   
+#   pop1980 <- pop1980[,c("Year of Estimate", "FIPS State and County Codes", "race", "sex", "pop")]
+#   names(pop1980) <- c("year", "fips", "race", "sex", "pop")
+#   pop1980 <- data.frame(pop1980)
+#   
+#   pop1980 <- reshape(pop1980, direction = "wide", idvar=c("year", "fips", "race"), timevar = "sex")
+#   pop1980 <- reshape(pop1980, direction = "wide", idvar=c("year", "fips"), timevar = "race")
+#   temp[[as.character(i)]] <- pop1980
+#   
+# }
+# pop1980 <- do.call(rbind, temp)
+# 
+# for(i in 1970:1979) {
+#   if(i == 1970) {temp <- list()}
+#   pop1970 <- read_xls(sprintf("/Users/christianbaehr/Downloads/pop1970/co-asr-%s.xls",as.character(i)), skip=4)
+#   pop1970 <- pop1970[-1, ]
+#   
+#   pop1970$pop <- apply(pop1970[, !names(pop1970) %in% c("Year of Estimate", "FIPS State and County Codes", "Race/Sex Indicator")],
+#                        1, FUN=function(x) sum(x))
+#   
+#   pop1970$sex <- ifelse(grepl("female", pop1970$`Race/Sex Indicator`), "female", "male")
+#   pop1970$race <- ifelse(grepl("Black", pop1970$`Race/Sex Indicator`), "black",
+#                          ifelse(grepl("White", pop1970$`Race/Sex Indicator`), "white", "other"))
+#   
+#   pop1970 <- pop1970[,c("Year of Estimate", "FIPS State and County Codes", "race", "sex", "pop")]
+#   names(pop1970) <- c("year", "fips", "race", "sex", "pop")
+#   pop1970 <- data.frame(pop1970)
+#   
+#   pop1970 <- reshape(pop1970, direction = "wide", idvar=c("year", "fips", "race"), timevar = "sex")
+#   pop1970 <- reshape(pop1970, direction = "wide", idvar=c("year", "fips"), timevar = "race")
+#   temp[[as.character(i)]] <- pop1970
+# }
+# pop1970 <- do.call(rbind, temp)
+# 
+# pop_1970_89 <- do.call(rbind, list(pop1970, pop1980))
+# # pull the 1989 population data forward one year to 1990 so we have a measure. Redistricting files with pop start in 1992
+# pop_1970_89$year[which(pop_1970_89$year==1989)] <- 1990
+# 
+# ###
+# 
+# pop_1970_89$fips[which(pop_1970_89$fips=="12025")] <- "12086" # miami dade FIPS changed in 2001
+# # no record of an Armstrong SD, and Broomfield CO was created post 1990 so not in the data
+# 
+# ###
+# 
+# #sum(!countyplus$fips %in% pop_1970_89$fips) # mostly pre 1970
+# #View(countyplus[(!countyplus$fips %in% pop_1970_89$fips), ])
+# 
+# countyplus <- merge(countyplus, pop_1970_89, by.x=c("fips", "con_raceYear"), by.y=c("fips", "year"), all.x=T)
+# countyplus$county_pop[is.na(countyplus$county_pop)] <- apply(countyplus[is.na(countyplus$county_pop), grep("pop\\.", names(countyplus))], 1, sum)
 
-for(i in 1970:1979) {
-  if(i == 1970) {temp <- list()}
-  pop1970 <- read_xls(sprintf("/Users/christianbaehr/Downloads/pop1970/co-asr-%s.xls",as.character(i)), skip=4)
-  pop1970 <- pop1970[-1, ]
-  
-  pop1970$pop <- apply(pop1970[, !names(pop1970) %in% c("Year of Estimate", "FIPS State and County Codes", "Race/Sex Indicator")],
-                       1, FUN=function(x) sum(x))
-  
-  pop1970$sex <- ifelse(grepl("female", pop1970$`Race/Sex Indicator`), "female", "male")
-  pop1970$race <- ifelse(grepl("Black", pop1970$`Race/Sex Indicator`), "black",
-                         ifelse(grepl("White", pop1970$`Race/Sex Indicator`), "white", "other"))
-  
-  pop1970 <- pop1970[,c("Year of Estimate", "FIPS State and County Codes", "race", "sex", "pop")]
-  names(pop1970) <- c("year", "fips", "race", "sex", "pop")
-  pop1970 <- data.frame(pop1970)
-  
-  pop1970 <- reshape(pop1970, direction = "wide", idvar=c("year", "fips", "race"), timevar = "sex")
-  pop1970 <- reshape(pop1970, direction = "wide", idvar=c("year", "fips"), timevar = "race")
-  temp[[as.character(i)]] <- pop1970
-}
-pop1970 <- do.call(rbind, temp)
+census <- read.csv("census_county.csv", stringsAsFactors = F)
 
-pop_1970_89 <- do.call(rbind, list(pop1970, pop1980))
-# pull the 1989 population data forward one year to 1990 so we have a measure. Redistricting files with pop start in 1992
-pop_1970_89$year[which(pop_1970_89$year==1989)] <- 1990
+countyplus <- merge(countyplus, census, by.x = c("fips", "con_raceYear"), by.y = c("fips", "year"), all.x=T)
 
-countyplus <- merge(countyplus, pop_1970_89, by.x=c("fips", "con_raceYear"), by.y=c("fips", "year"), all.x=T)
-countyplus$county_pop[is.na(countyplus$county_pop)] <- apply(countyplus[is.na(countyplus$county_pop), grep("pop\\.", names(countyplus))], 1, sum)
 
 county$mergeid <- paste(tolower(county$statenm), tolower(county$countynm), county$decade)
 pres$mergeid <- paste(tolower(pres$statenm), tolower(pres$countynm), pres$decade)
@@ -456,15 +479,23 @@ names(countyplus) <- gsub("\\.","_",names(countyplus))
 
 countyplus <- countyplus[, !names(countyplus) %in% c("x", "decade", "year")]
 
-countyplus$con_unopposed <- (countyplus$con_demcandidate=="N/A" & countyplus$con_demstatus=="N/A") | (countyplus$con_repcandidate=="N/A" & countyplus$con_repstatus=="N/A")
+# seats are also unopposed if both the candidate and status variables are NA for the other party
+countyplus$con_demunopposed <- ifelse((countyplus$con_repcandidate=="N/A" & countyplus$con_repstatus=="N/A"),
+                                      TRUE,
+                                      countyplus$con_demunopposed)
+
+countyplus$con_repunopposed <- ifelse((countyplus$con_demcandidate=="N/A" & countyplus$con_demstatus=="N/A"),
+                                      TRUE,
+                                      countyplus$con_repunopposed)
+#countyplus$con_unopposed <- (countyplus$con_demcandidate=="N/A" & countyplus$con_demstatus=="N/A") | (countyplus$con_repcandidate=="N/A" & countyplus$con_repstatus=="N/A")
 
 ###
 
 #View(countyplus[is.na(countyplus$unit_weight),]) 
 # only missing weights cases are in at Large districts or before 1950
 
-View(countyplus[is.na(countyplus$county_pop), ])
-table(countyplus$con_raceyear[is.na(countyplus$county_pop)]) # why are there 3248 missing countypop obs. in 1990?
+View(countyplus[is.na(countyplus$countypop), ])
+table(countyplus$con_raceyear[is.na(countyplus$countypop)]) # why are there 3248 missing countypop obs. in 1990?
 table(countyplus$con_raceyear)
 
 #countyplus$con_demvotes <- gsub(",", "", countyplus$con_demvotes)
@@ -529,15 +560,6 @@ cd_level <- cd_level[,!grepl("votes", names(cd_level))]
 library(modelsummary)
 f_summary <- All(cd_level) ~ N+Mean+SD+Median+Min+P25+P75+Max
 datasummary(formula=f_summary, data=cd_level, output="/Users/christianbaehr/Desktop/sum_stats.tex")
-
-
-load("WDI_vars.RData")
-sumdat <- imf_panel[, !names(imf_panel) %in% keep_vars]
-sumdat <- sumdat[, sort(names(sumdat))]
-
-f_summary <- All(sumdat) ~ N+Mean+SD+Median+Min+P25+P75+Max
-datasummary(formula=f_summary, data=sumdat, output="../results/sum_stats.tex")
-
 
 
 county_store <- countyplus

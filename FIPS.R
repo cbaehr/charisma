@@ -37,6 +37,23 @@ result$countypop <- NA
 result <- subset(result, select=c( "countynm", "statenm",  "year", "state", "county", "cd","fips", "unit_pop", "countypop", "unit_weight"))
 
 merged <- rbind(result, rocio2) ## 24401 obs in total
+
+###
+
+# want to utilize the fips codes that Dahyun manually added to this dataset
+fips <- read.csv("condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_nomissingness_DONOTEDIT.csv", stringsAsFactors = F)
+
+temp <- merge(merged, fips[,c("countynm", "statenm", "year", "cd", "fips")], by=c("countynm", "statenm", "cd", "year"), all.x=T)
+
+temp$fips.x[is.na(temp$fips.x)] <- temp$fips.y[is.na(temp$fips.x)]
+
+temp <- temp[, names(temp)!="fips.y"]
+names(temp)[names(temp)=="fips.x"] <- "fips"
+
+merged <- temp
+
+###
+
 write.csv(merged, "condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv")
 
 summary(merged)
