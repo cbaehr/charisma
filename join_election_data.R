@@ -5,14 +5,20 @@ library(readxl)
 
 ###
 
-#county <- read.csv("condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_nomissingness.csv", stringsAsFactors = F)
 county <- read.csv("condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv", stringsAsFactors = F)
 
-#temp <- read.csv("condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv", stringsAsFactors = F)
+# dont understand why there are a few CDs coded as "ZZ" in the ICPSR 13 data for 1992-2012. But
+# I checked and in each instance, the county coded with CD=="ZZ" had entries for other CDs as 
+# well. And the "unit weight" for the other entries always summed up to 1. So these "ZZ" 
+# entries are completely redundant
+county <- county[which(county$cd!="ZZ"), ]
 
-#county$unit_weight <- temp$unit_weight # missing geographic weights for 820 cases
-#county$unit_pop <- temp$unit_pop # missing unit populations for 1952-82. Will use the geographic weights 
-#county$county_pop <- temp$countypop
+county$cd <- as.numeric(county$cd)
+
+county <- county[, c("countynm", "statenm", "cd", "year", "fips", "unit_pop",
+                     "countypop", "unit_weight")]
+
+county <- county[which(county$year >= 1972), ]
 
 # missing unit weights for 820 cases. All of these cases were coded in congressional district (52, 96, 98, 99)
 # these either represent at large elections or district numbers that do not actually exist
@@ -20,35 +26,51 @@ county <- read.csv("condistrict_to_county_mapping_withcountynames_1952-2012_fips
 
 ###
 
-## COUNTIES IN SINGLE DISTRICT STATES SHOULD HAVE FULL WEIGHT
+#table(county$statenm[county$cd %in% c(98, 99)])
 
-county$unit_weight[which(county$cd==52 & county$statenm=="North Dakota")] <- 1
+# only one CD in ND after 1972
+county$cd[which(county$year>=1972 & county$statenm=="North Dakota")] <- 1
+county$unit_weight[which(county$year>=1972 & county$statenm=="North Dakota")] <- 1
 
-county$unit_weight[which(county$statenm=="Vermont")] <- 1
-county$cd[which(county$statenm=="Vermont")] <- "At Large"
+# only one CD in DE
+county$cd[which(county$statenm=="Delaware")] <- 1
+county$unit_weight[which(county$statenm=="Delaware")] <- 1
 
+# only one CD in WY
+county$cd[which(county$statenm=="Wyoming")] <- 1
 county$unit_weight[which(county$statenm=="Wyoming")] <- 1
-county$cd[which(county$statenm=="Wyoming")] <- "At Large"
 
-county$unit_weight[which(county$statenm=="North Dakota" & county$year>=1972)] <- 1
-county$cd[which(county$statenm=="North Dakota" & county$year>=1972)] <- "At Large"
+# only one CD in VT
+county$cd[which(county$statenm=="Vermont")] <- 1
+county$unit_weight[which(county$statenm=="Vermont")] <- 1
 
-county$unit_weight[which(county$statenm=="South Dakota" & county$year>=1982)] <- 1
-county$cd[which(county$statenm=="South Dakota" & county$year>=1982)] <- "At Large"
+# only one CD in SD after 1982
+county$cd[which(county$year>=1982 & county$statenm=="South Dakota")] <- 1
+county$unit_weight[which(county$year>=1982 & county$statenm=="South Dakota")] <- 1
+
+# only one CD in MT after 1982
+county$cd[which(county$year>=1982 & county$statenm=="Montana")] <- 1
+county$unit_weight[which(county$year>=1982 & county$statenm=="Montana")] <- 1
+
+# only one CD in NV prior 1982
+county$cd[which(county$year<1982 & county$statenm=="Nevada")] <- 1
+county$unit_weight[which(county$year<1982 & county$statenm=="Nevada")] <- 1
 
 # drop the remaining at-large cases with no unit weight. These won't be factored into the final data anyway.
+# There are only 10 cases and the only ones that involve urban areas are three counties near Norfolk VA.
+# The others represent random counties across the country
 county <- county[!is.na(county$unit_weight), ]
 
 ###
 
+# merging on state and county names. Change to lowercase and remove punctuation
 county$statenm <- tolower(county$statenm)
 county$countynm <- tolower(county$countynm)
 county$countynm <- gsub("\\.", "", county$countynm)
 
 county$decade <- county$year
 
-county$cd <- as.numeric(county$cd)
-
+# tweaking county names to match with names from the congress voting data
 county$countynm[which(county$statenm=="alabama" & county$countynm=="calhoun/benton")] <- "calhoun"
 county$countynm[which(county$statenm=="alabama" & county$countynm=="chilton/baker")] <- "chilton"
 county$countynm[which(county$statenm=="alabama" & county$countynm=="de kalb")] <- "dekalb"
@@ -76,11 +98,17 @@ county$countynm[which(county$statenm=="texas" & county$countynm=="cass/davis")] 
 county$countynm[which(county$statenm=="texas" & county$countynm=="stephens/buchanan")] <- "stephens"
 county$countynm[which(county$statenm=="virginia" & county$countynm=="alexandria city")] <- "alexandria"
 county$countynm[which(county$statenm=="virginia" & county$countynm=="arlington/alexand")] <- "arlington"
+county$countynm[which(county$statenm=="virginia" & county$countynm=="norfolk city")] <- "norfolk"
 county$countynm[which(county$statenm=="washington" & county$countynm=="grays harbor/cheh")] <- "grays harbor"
 county$countynm[which(county$statenm=="wisconsin" & county$countynm=="bayfield/la point")] <- "bayfield"
 
+county$fips[which(county$countynm=="miami-dade")] <- 12086
+county$fips[which(county$countynm=="dekalb" & county$statenm=="georgia")] <- 13089
+county$fips[which(county$countynm=="st clair" & county$statenm=="illinois")] <- 17163
+county$fips[which(county$countynm=="mackinac" & county$statenm=="michigan")] <- 26097
+county$fips[which(county$countynm=="st louis city" & county$decade<1992)] <- 29510
 
-###
+################################################################################
 
 congress <- lapply(paste0("congressdata/", list.files("congressdata")), function(x) read.csv(x, stringsAsFactors = F, skip=2))
 congress <- do.call(rbind, congress)
@@ -91,21 +119,39 @@ congress$statenm <- tolower(congress$State)
 
 congress$cd <- gsub("District ", "", congress$Area)
 
+congress$raceYear <- as.numeric(congress$raceYear)
+
+# for some reason the CQ data only includes one observation for michigan in 2010. So I omit the election entirely
+congress <- congress[which(!(congress$statenm=="michigan" & congress$raceYear==2010)), ]
+
+# change district # for single district states to 1
+congress$cd[which(congress$raceYear>=1972 & congress$statenm=="north dakota")] <- 1
+congress$cd[which(congress$statenm=="delaware")] <- 1
+congress$cd[which(congress$statenm=="wyoming")] <- 1
+congress$cd[which(congress$statenm=="vermont")] <- 1
+congress$cd[which(congress$raceYear>=1982 & congress$statenm=="south dakota")] <- 1
+congress$cd[which(congress$raceYear>=1992 & congress$statenm=="montana")] <- 1
+congress$cd[which(congress$raceYear<1982 & congress$statenm=="nevada")] <- 1
+
+
 congress$countynm <- tolower(congress$Area)
 congress$countynm <- gsub("\\.", "", congress$countynm)
 congress$countynm <- trimws(congress$countynm)
-
-congress$raceYear <- as.numeric(congress$raceYear)
 
 dfloor <- function(x) {
   return(((x-2) %/% 10) *10 + 2)
 }
 congress$decade <- dfloor(congress$raceYear)
 
+# one weird special election in which the candidate died and his wife ran in the special election to replace
+# him, but they still coded the special election with his name
 congress <- congress[which(!(congress$RepCandidate=="Letlow, Luke J." & congress$DemStatus=="N/A")),]
 
-drop <- (duplicated(congress[, c("statenm", "cd", "raceYear")])|duplicated(congress[, c("statenm", "cd", "raceYear")], fromLast=T)) & (congress$OtherVotes!="N/A" & congress$ThirdVotes!="N/A")
-congress <- congress[!drop, ] # dropping these duplicated observations which include primary elections AND runoffs (primary elections indicated when there is a non-missing value for OtherVotes or ThirdVotes)
+# dropping these duplicated observations which include primary elections AND runoffs (primary elections indicated when there is a 
+#non-missing value for OtherVotes or ThirdVotes)
+drop <- (duplicated(congress[, c("statenm", "cd", "raceYear")])|duplicated(congress[, c("statenm", "cd", "raceYear")], fromLast=T)) & 
+  (congress$OtherVotes!="N/A" & congress$ThirdVotes!="N/A")
+congress <- congress[!drop, ]
 
 congress <- congress[, c("statenm", "cd", "decade", "raceYear", "RepVotes", "DemVotes", "ThirdVotes", "OtherVotes",
                          "PluralityVotes", "RepVotesMajorPercent", "DemVotesMajorPercent", "ThirdVotesTotalPercent",
@@ -119,19 +165,18 @@ names(congress) <- c("statenm", "cd", "decade",
 congress$con_RepUnopposed <- congress$con_RepVotes=="Unopposed"
 congress$con_DemUnopposed <- congress$con_DemVotes=="Unopposed"
 
-countyplus <- merge(county, congress, by = c("statenm", "cd", "decade"), all.y=T)
+congress <- congress[congress$con_raceYear>=1972, ]
 
-#sum(duplicated(congress[, c("statenm", "cd", "con_raceYear")]))
-#View(congress[which(duplicated(congress[, c("statenm", "cd", "con_raceYear")]) | duplicated(congress[, c("statenm", "cd", "con_raceYear")], fromLast = T)), ])
+# district 13 in California and district 3 in kentucky have no districts. Otherwise all have matches.
+countyplus <- merge(county, congress, by = c("statenm", "cd", "decade"))
 
-###
+################################################################################
 
 files <- paste0("elections/", grep("president", list.files("elections"), value=T))
 pres <- lapply(files, function(x) read.csv(x, stringsAsFactors = F, skip=2))
 pres <- do.call(rbind, pres)
 
 pres <- pres[which(pres$Office=="President"),]
-#View(pres[which(tolower(pres$Area) == tolower(pres$State)), ])
 
 pres$statenm <- tolower(pres$State)
 pres$countynm <- tolower(pres$Area)
@@ -141,7 +186,7 @@ pres$countynm <- trimws(pres$countynm)
 pres$RaceDate <- as.numeric(pres$RaceDate)
 pres$RaceDate <- as.numeric(substr(pres$RaceDate, 1, 4))
 
-#View(pres[duplicated(pres[, c("statenm", "countynm", "RaceDate")])|duplicated(pres[, c("statenm", "countynm", "RaceDate")], fromLast = T),])
+###
 
 pres <- pres[which(!(pres$statenm=="alaska" & pres$RaceDate==2020 & pres$countynm=="election district 1" & pres$TotalVotes==0)), ]
 
@@ -154,22 +199,22 @@ for(i in c("TotalVotes", "RepVotes", "DemVotes", "OtherVotes", "PluralityVotes")
   pres[keep, i] <- pres[which(drop), i]
 }
 
-#pres$DemVotesTotalPercent[keep] <- as.numeric(pres$DemVotes[keep])/as.numeric(pres$TotalVotes[keep])
-#pres$RepVotesTotalPercent[keep] <- as.numeric(pres$RepVotes[keep])/as.numeric(pres$TotalVotes[keep])
-#pres$OtherVotesTotalPercent[keep] <- as.numeric(pres$OtherVotes[keep]) / as.numeric(pres$TotalVotes[keep])
-#pres$DemVotesMajorPercent[keep] <- as.numeric(pres$DemVotes[keep])/(as.numeric(pres$DemVotes[keep])+as.numeric(pres$RepVotes[keep]))
-#pres$RepVotesMajorPercent[keep] <- as.numeric(pres$RepVotes[keep])/(as.numeric(pres$DemVotes[keep])+as.numeric(pres$RepVotes[keep]))
-
 pres <- pres[which(!drop), ]
-
-
 pres$TotalVotes[keep] <- gsub(",", "", pres$TotalVotes[keep])
 
+###
 
-#pres <- pres[which(pres$decade!=1942), ]
+pres <- pres[which(pres$RaceDate>=1972), ]
+
+pres$countynm[which(pres$statenm=="virginia" & pres$countynm=="norfolk city" & pres$RaceDate>=2016)] <- "norfolk"
 
 # no match for Hawaii Kalawao or Maui or Nevada Ormsby
 # armstrong county in South Dakota is defunct, has no match
+# la paz county in Arizona was created in 1983, not present in county data until 1992. Missing matches for 1984, 1988.
+# milton county georgia does not appear to exist anymore
+# no match for assumption parish Louisiana 1982
+# presidential voting data considers Kansas City to be its own county after 2000. However Kansas city is actually a part of several counties
+# there are also several counties in Virginia that have no matches in a few years. No record of Manassas/Manassas Park prior to 1982
 
 pres <- pres[, c("statenm", "countynm", "RaceDate",
                  "TotalVotes", "RepVotes", "DemVotes", "OtherVotes", "PluralityVotes", "RepVotesTotalPercent",
@@ -184,7 +229,13 @@ names(pres) <- c("statenm", "countynm",
 
 countyplus <- merge(countyplus, pres, by.x=c("statenm", "countynm", "con_raceYear"), by.y=c("statenm", "countynm", "pres_RaceDate"), all.x=T)
 
-###
+# one county gets duplicated after this merge. Omit the duplicated copy.
+countyplus <- countyplus[which(!(countyplus$statenm=="virginia" & 
+                                   countyplus$countynm=="norfolk" & 
+                                   countyplus$con_raceYear==2020 & 
+                                   countyplus$pres_TotalVotes=="0")), ]
+
+################################################################################
 
 senate <- lapply(paste0("cq_senate_county/", list.files("cq_senate_county")), function(x) read.csv(x, stringsAsFactors = F, skip=2))
 senate <- do.call(rbind, senate)
@@ -201,10 +252,27 @@ senate$RaceDate <- as.numeric(substr(senate$RaceDate, 1, 4))
 senate$RepUnopposed <- senate$RepVotes=="Unopposed"
 senate$DemUnopposed <- senate$DemVotes=="Unopposed"
 
-drop <- (duplicated(senate[, c("statenm", "countynm", "RaceDate")])|duplicated(senate[, c("statenm", "countynm", "RaceDate")], fromLast = T)) & (senate$RepVotes=="N/A" & senate$DemVotes=="N/A") & (senate$statenm %in% c("georgia", "alaska"))
+drop <- (duplicated(senate[, c("statenm", "countynm", "RaceDate")]) | duplicated(senate[, c("statenm", "countynm", "RaceDate")], fromLast = T)) & 
+  (senate$RepVotes=="N/A" & senate$DemVotes=="N/A") & (senate$statenm %in% c("georgia", "alaska"))
 senate <- senate[which(!drop), ]
 
-#View(senate[duplicated(senate[, c("statenm", "countynm", "RaceDate")])|duplicated(senate[, c("statenm", "countynm", "RaceDate")], fromLast = T), ])
+###
+
+# there are several counties (~40) in the senate data that have no match in the countyplus
+# dataset for a given year of 
+
+senate <- senate[which(!(senate$statenm=="georgia" & senate$RaceDate==2020)),]
+senate$RaceDate[which(senate$statenm=="georgia" & senate$RaceDate==2021)] <- 2020
+
+senate$countynm[which(senate$statenm=="virginia" & senate$countynm=="norfolk city" & senate$RaceDate>=2012)] <- "norfolk"
+
+# couple observations in virginia repeated for 2016 and 2020 election
+senate <- senate[which(!(senate$RepVotes=="N/A" & senate$statenm=="virginia" & senate$countynm=="norfolk" & 
+                           (senate$RepCandidate %in% c("Stewart, Corey A.", "Gade, Daniel MacArthur") ))),  ]
+
+###
+
+senate <- senate[which(senate$RaceDate>=1972), ]
 
 senate$RepVotes <- as.numeric(gsub(",", "", senate$RepVotes))
 senate$DemVotes <- as.numeric(gsub(",", "", senate$DemVotes))
@@ -251,8 +319,8 @@ seats <- function(x) {
 
 seatyears <- tapply(senate$RaceDate, INDEX=list(senate$statenm), FUN=seats)
 
-seatyears$illinois$seat2 <- seq(1966, 2022, 6) # this will correct for (ignore) a special election in 1970
-# also ignoring a Georgia special election from 2021
+#seatyears$illinois$seat2 <- seq(1966, 2022, 6) # this will correct for (ignore) a special election in 1970
+# also omitting a Georgia special election from 2020
 for(i in 1:length(seatyears)) {
   if(i==1) {seatyears1 <- list(); seatyears2 <- list()}
   seatyears1[[i]] <- data.frame(state=names(seatyears)[i], year=seatyears[[i]]$seat1)
@@ -260,18 +328,6 @@ for(i in 1:length(seatyears)) {
 }
 seatyears1 <- do.call(rbind, seatyears1)
 seatyears2 <- do.call(rbind, seatyears2)
-
-#seatyears1$merge <- paste(seatyears1$state, seatyears1$year)
-#seatyears2$merge <- paste(seatyears2$state, seatyears2$year)
-
-#senate$merge <- paste(senate$statenm, senate$sen_RaceDate)
-
-#senate_seat1 <- merge(seatyears1, senate, by="merge")
-#senate_seat2 <- merge(seatyears2, senate, by="merge")
-
-#test <- rbind(seatyears1, seatyears2)
-
-#View(senate[!senate$merge %in% test$merge, ])
 
 senate_seat1 <- merge(seatyears1, senate, by.x=c("state", "year"), by.y=c("statenm", "RaceDate"))
 senate_seat2 <- merge(seatyears2, senate, by.x=c("state", "year"), by.y=c("statenm", "RaceDate"))
@@ -305,10 +361,7 @@ countyplus <- merge(countyplus, senate_seat1, by.x=c("statenm", "countynm", "con
 countyplus <- merge(countyplus, senate_seat2, by.x=c("statenm", "countynm", "con_raceYear"),
                     by.y=c("statenm", "countynm", "sen2_RaceDate"), all.x=T) # need to pull forward the senate results from prior year
 
-
-# 459 observations still duplicated across state, county, year, cd. CHECK THESE CASES
-#View(data.frame(senate[!senate$countynm %in% countyplus$countynm, c("statenm", "countynm")]))
-#View(data.frame(countyplus[!countyplus$countynm %in% senate$countynm, c("statenm", "countynm")]))
+# missing a few cases still from the same counties that were missing in presidential merge
 
 ###
 
@@ -316,9 +369,7 @@ governor <- lapply(paste0("governor_county//", list.files("governor_county/")), 
 governor <- do.call(rbind, governor)
 
 # some cases were erroneously coded as Texas elections when they were actually in Nevada
-governor$State[which(governor$RepCandidate=="List, Robert F." & governor$DemCandidate=="Bryan, Richard H.")] <- "Nevada"
-
-#View(governor[which(governor$RepCandidate=="List, Robert F." & governor$DemCandidate=="Bryan, Richard H."),])
+governor <- governor[which(!(governor$RepCandidate=="List, Robert F." & governor$DemCandidate=="Bryan, Richard H." & governor$State=="Texas")), ]
 
 governor <- governor[which(governor$Office=="Governor"), ]
 
@@ -333,8 +384,20 @@ governor$RaceDate <- as.numeric(substr(governor$RaceDate, 1, 4))
 # this removes observations for primary elections preceding runoffs in Louisiana 
 governor <- governor[!(governor$State=="Louisiana" & governor$RepCandidate=="N/A" & governor$DemCandidate=="N/A"), ]
 
-#View(governor[duplicated(governor[,c("statenm", "countynm", "RaceDate")]) | duplicated(governor[,c("statenm", "countynm", "RaceDate")], fromLast=T), ])
-#governor <- governor[which(governor$RepVotes!="N/A" & governor$DemVotes!="N/A"), ]
+governor <- governor[which(governor$RaceDate>=1972), ]
+
+governor$countynm[which(governor$statenm=="virginia" & governor$countynm=="norfolk city" & governor$RaceDate>=2010)] <- "norfolk"
+
+# if the gubernatorial election occurred on a non-congressional race year (e.g. an odd year), 
+# I move the governor race forward one year, so it corresponds to the congressional race in the
+# year FOLLOWING the governor race
+governor$RaceDate <- ifelse(governor$RaceDate %%2 ==0, governor$RaceDate, governor$RaceDate+1)
+
+# there are a bunch of erroneous elections from Nevada 1982 election where the candidates
+# correspond to counties from Texas. These are omitted.
+
+# because we are omitting Michigan 2010, all the gubernatorial rows corresponding to that election year
+# for michigan are omitted
 
 governor <- governor[, c("statenm", "countynm", "RaceDate", "RepVotes",
                          "DemVotes", "ThirdVotes", "OtherVotes", "PluralityVotes", "RepVotesMajorPercent", "DemVotesMajorPercent", "ThirdVotesTotalPercent", 
@@ -345,95 +408,36 @@ names(governor) <- c("statenm", "countynm",
                                       "DemVotes", "ThirdVotes", "OtherVotes", "PluralityVotes", "RepVotesMajorPercent", "DemVotesMajorPercent", "ThirdVotesTotalPercent", 
                                       "RepCandidate", "RepStatus", "DemCandidate", "DemStatus", "PluralityParty", "ThirdParty", "ThirdCandidate", "ThirdStatus")))
 
-countyplus <- merge(countyplus, governor, by.x=c("statenm", "countynm", "con_raceYear"), by.y=c("statenm", "countynm", "gov_RaceDate"), all.x=T) # need to pull forward the governor results from prior year
-
-###
+countyplus <- merge(countyplus, governor, by.x=c("statenm", "countynm", "con_raceYear"), by.y=c("statenm", "countynm", "gov_RaceDate"), all.x=T)
 
 unique(countyplus$fips[nchar(countyplus$fips)==4])
 countyplus$fips <- ifelse(nchar(countyplus$fips)==4, paste0("0", countyplus$fips), countyplus$fips)
 
-# for(i in 1980:1989) {
-#   if(i == 1980) {temp <- list()}
-#   pop1980 <- read_xls("/Users/christianbaehr/Downloads/pe-02.xls", skip = 5, sheet = as.character(i))
-#   pop1980 <- pop1980[-1, ]
-#   
-#   pop1980$pop <- apply(pop1980[, !names(pop1980) %in% c("Year of Estimate", "FIPS State and County Codes", "Race/Sex Indicator")],
-#                        1, FUN=function(x) sum(x))
-#   
-#   pop1980$sex <- ifelse(grepl("female", pop1980$`Race/Sex Indicator`), "female", "male")
-#   pop1980$race <- ifelse(grepl("Black", pop1980$`Race/Sex Indicator`), "black",
-#                          ifelse(grepl("White", pop1980$`Race/Sex Indicator`), "white", "other"))
-#   
-#   pop1980 <- pop1980[,c("Year of Estimate", "FIPS State and County Codes", "race", "sex", "pop")]
-#   names(pop1980) <- c("year", "fips", "race", "sex", "pop")
-#   pop1980 <- data.frame(pop1980)
-#   
-#   pop1980 <- reshape(pop1980, direction = "wide", idvar=c("year", "fips", "race"), timevar = "sex")
-#   pop1980 <- reshape(pop1980, direction = "wide", idvar=c("year", "fips"), timevar = "race")
-#   temp[[as.character(i)]] <- pop1980
-#   
-# }
-# pop1980 <- do.call(rbind, temp)
-# 
-# for(i in 1970:1979) {
-#   if(i == 1970) {temp <- list()}
-#   pop1970 <- read_xls(sprintf("/Users/christianbaehr/Downloads/pop1970/co-asr-%s.xls",as.character(i)), skip=4)
-#   pop1970 <- pop1970[-1, ]
-#   
-#   pop1970$pop <- apply(pop1970[, !names(pop1970) %in% c("Year of Estimate", "FIPS State and County Codes", "Race/Sex Indicator")],
-#                        1, FUN=function(x) sum(x))
-#   
-#   pop1970$sex <- ifelse(grepl("female", pop1970$`Race/Sex Indicator`), "female", "male")
-#   pop1970$race <- ifelse(grepl("Black", pop1970$`Race/Sex Indicator`), "black",
-#                          ifelse(grepl("White", pop1970$`Race/Sex Indicator`), "white", "other"))
-#   
-#   pop1970 <- pop1970[,c("Year of Estimate", "FIPS State and County Codes", "race", "sex", "pop")]
-#   names(pop1970) <- c("year", "fips", "race", "sex", "pop")
-#   pop1970 <- data.frame(pop1970)
-#   
-#   pop1970 <- reshape(pop1970, direction = "wide", idvar=c("year", "fips", "race"), timevar = "sex")
-#   pop1970 <- reshape(pop1970, direction = "wide", idvar=c("year", "fips"), timevar = "race")
-#   temp[[as.character(i)]] <- pop1970
-# }
-# pop1970 <- do.call(rbind, temp)
-# 
-# pop_1970_89 <- do.call(rbind, list(pop1970, pop1980))
-# # pull the 1989 population data forward one year to 1990 so we have a measure. Redistricting files with pop start in 1992
-# pop_1970_89$year[which(pop_1970_89$year==1989)] <- 1990
-# 
-# ###
-# 
-# pop_1970_89$fips[which(pop_1970_89$fips=="12025")] <- "12086" # miami dade FIPS changed in 2001
-# # no record of an Armstrong SD, and Broomfield CO was created post 1990 so not in the data
-# 
-# ###
-# 
-# #sum(!countyplus$fips %in% pop_1970_89$fips) # mostly pre 1970
-# #View(countyplus[(!countyplus$fips %in% pop_1970_89$fips), ])
-# 
-# countyplus <- merge(countyplus, pop_1970_89, by.x=c("fips", "con_raceYear"), by.y=c("fips", "year"), all.x=T)
-# countyplus$county_pop[is.na(countyplus$county_pop)] <- apply(countyplus[is.na(countyplus$county_pop), grep("pop\\.", names(countyplus))], 1, sum)
+###
 
 census <- read.csv("census_county.csv", stringsAsFactors = F)
+census$decade <- census$decade + 2
+census$fips <- as.character(census$fips)
+census$fips[nchar(census$fips)==4] <- paste0("0", census$fips[nchar(census$fips)==4])
 
-countyplus <- merge(countyplus, census, by.x = c("fips", "con_raceYear"), by.y = c("fips", "year"), all.x=T)
+census$fips[which(census$fips==12025)] <- 12086 # miami dade FIPS code changed
+census$fips[which(census$fips==12027 & census$decade<1992)] <- 12053 # desoto florida FIPS changed from 12053 to 12027
+census$fips[which(census$fips==29193 & census$decade<1982)] <- 29186 # desoto florida FIPS changed from 12053 to 12027
 
+census <- census[which(substr(census$fips,1,2)!="72"), ] # omitting puerto rico becuase its not in the voting data
 
-county$mergeid <- paste(tolower(county$statenm), tolower(county$countynm), county$decade)
-pres$mergeid <- paste(tolower(pres$statenm), tolower(pres$countynm), pres$decade)
-#View(data.frame(unique(county$mergeid[!(county$mergeid %in% pres$mergeid)])))
-#View(data.frame(unique(pres$mergeid[!(pres$mergeid %in% county$mergeid)])))
-#sum(duplicated(county$mergeid))
-#View(county[duplicated(county$mergeid) | duplicated(county$mergeid, fromLast = T), ])
+countyplus <- merge(countyplus, census, by.x = c("fips", "decade"), by.y = c("fips", "decade"), all.x=T)
+# either no idaho or no hawaii (11)
+# no honolulu (fips code 15003, 15005)
+# no assumption LA
+# fips 29193 no match
+# drop yellowstone national park county which was dissolved
+# 18 total non matches
 
 ###
 
-
-which(is.na(countyplus$gov_RepVotesMajorPercent))[50]
-# reference alabama 2004 - no governor election
 for(i in 1:nrow(countyplus)) {
-  #i=82
-  
+
   year <- countyplus$con_raceYear[i]
   county <- countyplus$countynm[i]
   cd <- countyplus$cd[i]
@@ -465,147 +469,109 @@ for(i in 1:nrow(countyplus)) {
   }
 }
 
-for(i in c("con_DemVotes", "con_RepVotes", "con_ThirdVotes", "con_OtherVotes", "pres_RepVotes", "pres_DemVotes", "pres_OtherVotes",
-           "sen1_DemVotes", "sen1_RepVotes", "sen1_ThirdVotes", "sen1_OtherVotes", "sen2_DemVotes", "sen2_RepVotes",
-           "sen2_ThirdVotes", "sen2_OtherVotes", "gov_RepVotes", "gov_DemVotes", "gov_ThirdVotes", "gov_OtherVotes")) {
-  countyplus[which(countyplus[,i]=="N/A"), i] <- 0
-  countyplus[,i] <- gsub(",", "", countyplus[,i])
-}
+# for(i in c("con_DemVotes", "con_RepVotes", "con_ThirdVotes", "con_OtherVotes", "pres_RepVotes", "pres_DemVotes", "pres_OtherVotes",
+#            "sen1_DemVotes", "sen1_RepVotes", "sen1_ThirdVotes", "sen1_OtherVotes", "sen2_DemVotes", "sen2_RepVotes",
+#            "sen2_ThirdVotes", "sen2_OtherVotes", "gov_RepVotes", "gov_DemVotes", "gov_ThirdVotes", "gov_OtherVotes")) {
+#   countyplus[which(countyplus[,i]=="N/A"), i] <- 0
+#   countyplus[,i] <- gsub(",", "", countyplus[,i])
+# }
 
 ###
 
 names(countyplus) <- tolower(names(countyplus))
-names(countyplus) <- gsub("\\.","_",names(countyplus))
 
 countyplus <- countyplus[, !names(countyplus) %in% c("x", "decade", "year")]
 
 # seats are also unopposed if both the candidate and status variables are NA for the other party
-countyplus$con_demunopposed <- ifelse((countyplus$con_repcandidate=="N/A" & countyplus$con_repstatus=="N/A"),
-                                      TRUE,
-                                      countyplus$con_demunopposed)
-
-countyplus$con_repunopposed <- ifelse((countyplus$con_demcandidate=="N/A" & countyplus$con_demstatus=="N/A"),
-                                      TRUE,
-                                      countyplus$con_repunopposed)
-#countyplus$con_unopposed <- (countyplus$con_demcandidate=="N/A" & countyplus$con_demstatus=="N/A") | (countyplus$con_repcandidate=="N/A" & countyplus$con_repstatus=="N/A")
-
-###
-
-#View(countyplus[is.na(countyplus$unit_weight),]) 
-# only missing weights cases are in at Large districts or before 1950
-
-View(countyplus[is.na(countyplus$countypop), ])
-table(countyplus$con_raceyear[is.na(countyplus$countypop)]) # why are there 3248 missing countypop obs. in 1990?
-table(countyplus$con_raceyear)
-
-#countyplus$con_demvotes <- gsub(",", "", countyplus$con_demvotes)
-#countyplus$con_repvotes <- gsub(",", "", countyplus$con_repvotes)
-
-#countyplus$con_demvotesmajorpercent <- as.numeric(countyplus$con_demvotes)/ (as.numeric(countyplus$con_demvotes)+as.numeric(countyplus$con_repvotes))
-
-#a <- tapply(countyplus$con_demvotesmajorpercent, INDEX=list(countyplus$statenm, countyplus$decade), FUN=mean, na.rm=T)
-
-sum(is.na(countyplus$unit_weight))
-View(countyplus[is.na(countyplus$unit_weight), ]) # bunch of at large elections. Drop these
-# check why we are dropping counties such as Louisville kentucky (CD 3 1988)
-
-#countyplus$con_demvotes <- gsub(",", "", countyplus$con_demvotes)
-#countyplus$con_demvotes <- as.numeric(countyplus$con_demvotes)
+countyplus$con_demunopposed[which(countyplus$con_repcandidate=="N/A" & countyplus$con_repstatus=="N/A")] <- T
+countyplus$con_repunopposed[which(countyplus$con_demcandidate=="N/A" & countyplus$con_demstatus=="N/A")] <- T
 
 ###
 
 sum(is.na(countyplus$unit_pop))
 
-for(i in grep("pop_", names(countyplus), value=T)) {
-  countyplus[, paste0("unit_", i)] <- countyplus[,i] * countyplus$unit_weight
-}
-
-vars <- c("pres_repvotes", "pres_demvotes", 
-          "sen1_repvotes", "sen1_demvotes", "sen2_repvotes", "sen2_demvotes",
-          "gov_repvotes", "gov_demvotes")
-for(i in vars) {
-  countyplus[,i] <- gsub(",", "", countyplus[,i])
-  countyplus[,i] <- as.numeric(countyplus[,i])
-  countyplus[,paste0("unit_", i)] <- countyplus[,i] * countyplus$unit_weight
-}
-
-countyplus$unit_con_repvotes <- countyplus$con_repvotes # dont need to rescale for congressional elections
-countyplus$unit_con_demvotes <- countyplus$con_demvotes
-
-cd_level <- aggregate(countyplus[, setdiff(grep("unit_",names(countyplus),value=T), c("unit_weight", "unit_pop"))],
-                      by=list(countyplus$statenm, countyplus$cd, countyplus$con_raceyear),
-                      FUN=sum, na.rm=T)
-# dont have 435 districts for 2010, check on this
-cd_level <- cd_level[which(cd_level$Group.3>1968), ]
-names(cd_level)[1:3] <- c("state", "cd", "year")
-names(cd_level) <- gsub("unit_", "", names(cd_level))
-
-cd_level$con_repshare <- cd_level$con_repvotes / (cd_level$con_demvotes+cd_level$con_repvotes)
-cd_level$con_demshare <- cd_level$con_demvotes / (cd_level$con_demvotes+cd_level$con_repvotes)
-
-cd_level$pres_demshare <- cd_level$pres_demvotes / (cd_level$pres_demvotes+cd_level$pres_repvotes)
-cd_level$pres_repshare <- cd_level$pres_repvotes / (cd_level$pres_demvotes+cd_level$pres_repvotes)
-
-cd_level$gov_repshare <- cd_level$gov_repvotes / (cd_level$gov_demvotes+cd_level$gov_repvotes)
-cd_level$gov_demshare <- cd_level$gov_demvotes / (cd_level$gov_demvotes+cd_level$gov_repvotes)
-
-cd_level$sen1_repshare <- cd_level$sen1_repvotes / (cd_level$sen1_demvotes+cd_level$sen1_repvotes)
-cd_level$sen1_demshare <- cd_level$sen1_demvotes / (cd_level$sen1_demvotes+cd_level$sen1_repvotes)
-
-cd_level$sen2_demshare <- cd_level$sen2_demvotes / (cd_level$sen2_demvotes+cd_level$sen2_repvotes)
-cd_level$sen2_repshare <- cd_level$sen2_repvotes / (cd_level$sen2_demvotes+cd_level$sen2_repvotes)
-
-cd_level <- cd_level[,!grepl("votes", names(cd_level))]
-
-library(modelsummary)
-f_summary <- All(cd_level) ~ N+Mean+SD+Median+Min+P25+P75+Max
-datasummary(formula=f_summary, data=cd_level, output="/Users/christianbaehr/Desktop/sum_stats.tex")
-
-
-county_store <- countyplus
+vars <- c("pres_totalvotes", "pres_repvotes", "pres_demvotes", "pres_othervotes",
+          "sen1_repvotes", "sen1_demvotes", "sen1_thirdvotes", "sen1_othervotes",
+          "sen2_repvotes", "sen2_demvotes", "sen2_thirdvotes", "sen2_othervotes",
+          "gov_repvotes", "gov_demvotes", "gov_thirdvotes", "gov_othervotes",
+          "pop_total", "pop_male", "pop_over65", "pop_white", "pop_black", "pop_spanishorigin")
 
 for(i in vars) {
+  
+  countyplus[which(countyplus[,i]=="N/A"), i] <- 0
   countyplus[,i] <- gsub(",", "", countyplus[,i])
+  
   countyplus[,i] <- as.numeric(countyplus[,i])
+  
   countyplus[,i] <- countyplus[,i] * countyplus$unit_weight
+  
 }
 
-test <- aggregate(countyplus[,vars],
-                  by=list(countyplus$con_raceyear, countyplus$statenm, countyplus$cd),
-                  FUN=mean, na.rm=T)
-test <- test[test$Group.1>1970, ]
+# adminvars <- c("statenm", "cd", "con_raceyear", "con_repcandidate", "con_demcandidate", "con_repstatus", "con_demstatus",
+#                "con_repunopposed", "con_demunopposed", "pres_repcandidate", "pres_demcandidate",
+#                "pres_repstatus", "pres_demstatus", 
+#                "sen1_repcandidate", "sen1_demcandidate", "sen1_repstatus", "sen1_demstatus",
+#                "sen2_repcandidate", "sen2_demcandidate", "sen2_repstatus", "sen2_demstatus",
+#                "gov_repcandidate", "gov_demcandidate", "gov_repstatus", "gov_demstatus")
+adminvars <- c("statenm", "cd", "con_raceyear", "con_repcandidate", "con_demcandidate", "con_repstatus", "con_demstatus",
+               "con_repunopposed", "con_demunopposed", "con_repvotes", "con_demvotes", "con_thirdvotes", "con_othervotes"
+               #"pres_repcandidate", "pres_demcandidate", "pres_repstatus", "pres_demstatus",
+               #"sen1_repcandidate", "sen1_demcandidate", "sen1_repstatus", "sen1_demstatus",
+               #"sen2_repcandidate", "sen2_demcandidate", "sen2_repstatus", "sen2_demstatus",
+               #"gov_repcandidate", "gov_demcandidate", "gov_repstatus", "gov_demstatus"
+               )
 
-test$con_repvoteshare <- test$con_repvotes / (test$con_demvotes+test$con_repvotes)
+adminvarlist <- as.list(countyplus[, adminvars])
 
-test$decade <- dfloor(test$Group.1)
-test2 <- aggregate(test[,c(vars, "con_repvoteshare")],
-                   by=list(test$Group.2, test$decade), 
-                   FUN=mean,  na.rm=T)
+cddata <- aggregate(countyplus[, vars], 
+                    by=adminvarlist, 
+                    FUN=function(x) sum(x, na.rm=T))
 
-#test2 <- test2[test2$Group.3>1962, ]
-#test2 <- test2[test2$Group.2!="At Large", ]
+votevars <- c("con_repvotes", "con_demvotes", "con_thirdvotes", "con_othervotes") 
+for(i in votevars) {
+  
+  cddata[which(cddata[,i]=="N/A"), i] <- 0
+  cddata[,i] <- gsub(",", "", cddata[,i])
+  
+  cddata[,i] <- as.numeric(cddata[,i])
+}
 
-conrep <- test2[, c("Group.1", "Group.2", "con_repvoteshare")]
-conrep <- reshape(conrep, direction="wide", idvar=c("Group.1"), timevar="Group.2")
-library(xtable)
-print(xtable(conrep, type = "latex"), file = "/Users/christianbaehr/Desktop/repvoteshare.tex")
+cddata$con_totalvotes <- cddata$con_repvotes + cddata$con_demvotes + cddata$con_thirdvotes + cddata$con_othervotes
 
-###
+cddata$con_repshare <- cddata$con_repvotes / cddata$con_totalvotes
+cddata$con_repshare[which(cddata$con_repunopposed)] <- 1
+cddata$con_repshare[which(cddata$con_demunopposed)] <- 0
 
-test <- aggregate(countyplus[,vars],
-                  by=list(countyplus$con_raceyear, countyplus$statenm, countyplus$cd),
-                  FUN=sum, na.rm=T)
-test <- test[test$Group.1>1970, ]
-test$decade <- dfloor(test$Group.1)
+cddata$con_demshare <- cddata$con_demvotes / cddata$con_totalvotes
+cddata$con_demshare[which(cddata$con_demunopposed)] <- 1
+cddata$con_demshare[which(cddata$con_repunopposed)] <- 0
 
-test2 <- aggregate(test[,c(vars, "unit_pop")],
-                   by=list(test$Group.2, test$decade), 
-                   FUN=sum,  na.rm=T)
+cddata$pres_totalvotes <- cddata$pres_repvotes + cddata$pres_demvotes + cddata$pres_othervotes
 
-conrep <- test2[, c("Group.1", "Group.2", "unit_pop")]
-conrep <- reshape(conrep, direction="wide", idvar=c("Group.1"), timevar="Group.2")
-library(xtable)
-print(xtable(conrep, type = "latex"), file = "/Users/christianbaehr/Desktop/population.tex")
+cddata$pres_repshare <- cddata$pres_repvotes / cddata$pres_totalvotes
+cddata$pres_demshare <- cddata$pres_demvotes / cddata$pres_totalvotes
+
+cddata$sen1_totalvotes <- cddata$sen1_demvotes + cddata$sen1_repvotes + cddata$sen1_thirdvotes + cddata$sen1_othervotes
+
+cddata$sen1_repshare <- cddata$sen1_repvotes / cddata$sen1_totalvotes
+cddata$sen1_demshare <- cddata$sen1_demvotes / cddata$sen1_totalvotes
+
+cddata$sen2_totalvotes <- cddata$sen2_demvotes + cddata$sen2_repvotes + cddata$sen2_thirdvotes + cddata$sen2_othervotes
+
+cddata$sen2_repshare <- cddata$sen2_repvotes / cddata$sen2_totalvotes
+cddata$sen2_demshare <- cddata$sen2_demvotes / cddata$sen2_totalvotes
+
+cddata$gov_totalvotes <- cddata$gov_repvotes + cddata$gov_demvotes + cddata$gov_thirdvotes + cddata$gov_othervotes
+
+cddata$gov_repshare <- cddata$gov_repvotes / cddata$gov_totalvotes
+cddata$gov_demshare <- cddata$gov_demvotes / cddata$gov_totalvotes
+
+popvars <- c("pop_male", "pop_over65", "pop_white", "pop_black", "pop_spanishorigin")
+for(i in popvars ) {
+  cddata[, paste0(i, "_pct")] <- cddata[, i] / cddata$pop_total
+}
+
+write.csv(cddata, "cd_panel_full.csv", row.names=F)
 
 
 
