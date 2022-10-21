@@ -1,12 +1,12 @@
 
-setwd("/Users/christianbaehr/Dropbox/charisma_project/data")
+setwd("/Users/christianbaehr/Dropbox/charisma_project/data/")
 
 library(sf)
 library(haven)
 
 sf_use_s2(F)
 
-dat <- data.frame(read_dta("../codes-from-Rocio-APSR-county-analysis/counties/output/icpsr13_final.dta"))
+dat <- data.frame(read_dta("original/codes-from-Rocio-APSR-county-analysis/counties/output/icpsr13_final.dta"))
 # order by year - will reduce the number of times we have to load senate data in to the loop
 dat <- dat[order(dat$year), ]
 
@@ -18,9 +18,9 @@ dat <- dat[which(dat$countynm!="OAHU"), ]
 dat$countynm[which(dat$countynm=="ORANGE/MOSQUITO")] <- "ORANGE"
 
 # read in CQ data for all years 
-cq <- do.call(rbind, list(read.csv("congressdata/congressdata_1944-1960.csv", stringsAsFactors = F, skip=2),
-                          read.csv("congressdata/congressdata_1962-1980.csv", stringsAsFactors = F, skip=2),
-                          read.csv("congressdata/congressdata_1982-2000.csv", stringsAsFactors = F, skip=2)))
+cq <- do.call(rbind, list(read.csv("original/congressdata/congressdata_1944-1960.csv", stringsAsFactors = F, skip=2),
+                          read.csv("original/congressdata/congressdata_1962-1980.csv", stringsAsFactors = F, skip=2),
+                          read.csv("original/congressdata/congressdata_1982-2000.csv", stringsAsFactors = F, skip=2)))
 cq$Area <- as.numeric(gsub("District ", "", cq$Area))
 cq$Area[which(cq$State=="Alaska")] <- 1 # Alaska has only one CD
 
@@ -35,14 +35,14 @@ cq$Area[which(cq$State=="Alaska")] <- 1 # Alaska has only one CD
 # when necessary
 cong <- list()
 for(i in unique(dat$year)) {
-  temp <- st_read(paste0("cd_boundaries/", i), stringsAsFactors = F)
+  temp <- st_read(paste0("original/cd_boundaries/", i), stringsAsFactors = F)
   temp <- temp[which(temp$DISTRICT != 0), ] # drop districts with district number 0
   cong[[as.character(i)]] <- st_transform(temp, crs=4326) # transform shapefile CRS to 4326
   
 }
 
 # load county shapefile
-county <- st_read("US_AtlasHCB_Counties_Gen0001/US_HistCounties_Gen0001_Shapefile/US_HistCounties_Gen0001.shp", stringsAsFactors=F)
+county <- st_read("original/US_AtlasHCB_Counties_Gen0001/US_HistCounties_Gen0001_Shapefile/US_HistCounties_Gen0001.shp", stringsAsFactors=F)
 # create area variable in squared km
 county$county_area <- as.numeric(st_area(county$geometry)) / 1000000
 
@@ -174,7 +174,7 @@ for( i in 1:nrow(dat) ) {
 datout <- do.call(rbind, datnew)
 datout <- datout[, c("year", "statenm", "state", "countynm", "county", "cd", "replaceid", "county_prop")]
 
-write.csv(datout, "condistrict_to_county_mapping_withcountynames_1952-82.csv", row.names=F)
+write.csv(datout, "working/condistrict_to_county_mapping_withcountynames_1952-82.csv", row.names=F)
 
 # -2 implies CDs for which we have a missing state shapefile (I assume these are mostly at large)
 # -1 implies at large CDs, as coded by the census

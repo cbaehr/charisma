@@ -5,9 +5,9 @@
 # 2000 breaks total population up into hispanic/nonhispanic
 # 2010 breaks up total population into hispanic/nonhispanic
 
-setwd("/Users/christianbaehr/Dropbox/charisma_project/data/input/")
+setwd("/Users/christianbaehr/Dropbox/charisma_project/data/")
 
-pop1970 <- read.csv("socialexplorer/census1970/R13208694_SL4601.csv", stringsAsFactors = F)
+pop1970 <- read.csv("original/socialexplorer/census1970/R13208694_SL4601.csv", stringsAsFactors = F)
 
 pop1970 <- pop1970[, c("Geo_FIPS", 
                        "SE_T001_001", "SE_T004_002",
@@ -41,7 +41,7 @@ pop1970$pop_over65 <- pop1970$pop_65to74 + pop1970$pop_over75
 
 ###
 
-pop1980 <- read.csv("socialexplorer/census1980/R13208700_SL11.csv", stringsAsFactors = F)
+pop1980 <- read.csv("original/socialexplorer/census1980/R13208700_SL11.csv", stringsAsFactors = F)
 
 pop1980 <- pop1980[, c("Geo_FIPS",
                        "SE_T001_001", "SE_T003_002",
@@ -75,7 +75,7 @@ pop1980$pop_over65 <- pop1980$pop_65to74 + pop1980$pop_75to84 + pop1980$pop_over
 
 ###
 
-pop1990 <- read.csv("socialexplorer/census1990/R13208704_SL050.csv", stringsAsFactors = F)
+pop1990 <- read.csv("original/socialexplorer/census1990/R13208704_SL050.csv", stringsAsFactors = F)
 
 pop1990 <- pop1990[, c("Geo_FIPS",
                        "SE_T001_001", "SE_T005_002",
@@ -109,7 +109,7 @@ pop1990$pop_over65 <- pop1990$pop_65to74 + pop1990$pop_75to84 + pop1990$pop_over
 # pop1990$pctunemploy <- 1- (pop1990$pop_over16_employed / pop1990$pop_over16)
 ###
 
-pop2000 <- read.csv("socialexplorer/census2000/R13208705_SL050.csv", stringsAsFactors = F)
+pop2000 <- read.csv("original/socialexplorer/census2000/R13208705_SL050.csv", stringsAsFactors = F)
 
 pop2000 <- pop2000[, c("Geo_FIPS",
                        "SE_T001_001", "SE_T005_002",
@@ -143,7 +143,7 @@ pop2000$pop_over65 <- pop2000$pop_65to74 + pop2000$pop_75to84 + pop2000$pop_over
 
 ###
 
-pop2010 <- read.csv("socialexplorer/census2010/R13208706_SL050.csv", stringsAsFactors = F)
+pop2010 <- read.csv("original/socialexplorer/census2010/R13208706_SL050.csv", stringsAsFactors = F)
 
 pop2010 <- pop2010[, c("Geo_FIPS",
                        "SE_T001_001", "SE_T003_002",
@@ -184,7 +184,7 @@ poplist <- lapply(list(pop1970, pop1980, pop1990, pop2000, pop2010), FUN=functio
 
 pop <- do.call(rbind, poplist)
 
-write.csv(pop, "../census_county.csv", row.names = F)
+write.csv(pop, "working/population_countylevel.csv", row.names = F)
 
 
 

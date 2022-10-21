@@ -5,7 +5,7 @@ library(readxl)
 
 ###
 
-county <- read.csv("condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv", stringsAsFactors = F)
+county <- read.csv("working/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv", stringsAsFactors = F)
 
 # dont understand why there are a few CDs coded as "ZZ" in the ICPSR 13 data for 1992-2012. But
 # I checked and in each instance, the county coded with CD=="ZZ" had entries for other CDs as 
@@ -25,8 +25,6 @@ county <- county[which(county$year >= 1972), ]
 # but North Dakota only has one congressional district, so we can assume all weights are 1
 
 ###
-
-#table(county$statenm[county$cd %in% c(98, 99)])
 
 # only one CD in ND after 1972
 county$cd[which(county$year>=1972 & county$statenm=="North Dakota")] <- 1
@@ -110,7 +108,7 @@ county$fips[which(county$countynm=="st louis city" & county$decade<1992)] <- 295
 
 ################################################################################
 
-congress <- lapply(paste0("congressdata/", list.files("congressdata")), function(x) read.csv(x, stringsAsFactors = F, skip=2))
+congress <- lapply(paste0("original/congressdata/", list.files("original/congressdata")), function(x) read.csv(x, stringsAsFactors = F, skip=2))
 congress <- do.call(rbind, congress)
 
 congress <- congress[which(congress$Office=="House"), ]
@@ -172,7 +170,7 @@ countyplus <- merge(county, congress, by = c("statenm", "cd", "decade"))
 
 ################################################################################
 
-files <- paste0("elections/", grep("president", list.files("elections"), value=T))
+files <- paste0("original/elections/", grep("president", list.files("original/elections"), value=T))
 pres <- lapply(files, function(x) read.csv(x, stringsAsFactors = F, skip=2))
 pres <- do.call(rbind, pres)
 
@@ -237,7 +235,7 @@ countyplus <- countyplus[which(!(countyplus$statenm=="virginia" &
 
 ################################################################################
 
-senate <- lapply(paste0("cq_senate_county/", list.files("cq_senate_county")), function(x) read.csv(x, stringsAsFactors = F, skip=2))
+senate <- lapply(paste0("original/elections/cq_senate_county/", list.files("original/elections/cq_senate_county")), function(x) read.csv(x, stringsAsFactors = F, skip=2))
 senate <- do.call(rbind, senate)
 senate <- senate[which(senate$Office=="Senate"), ]
 
@@ -319,7 +317,6 @@ seats <- function(x) {
 
 seatyears <- tapply(senate$RaceDate, INDEX=list(senate$statenm), FUN=seats)
 
-#seatyears$illinois$seat2 <- seq(1966, 2022, 6) # this will correct for (ignore) a special election in 1970
 # also omitting a Georgia special election from 2020
 for(i in 1:length(seatyears)) {
   if(i==1) {seatyears1 <- list(); seatyears2 <- list()}
@@ -365,7 +362,7 @@ countyplus <- merge(countyplus, senate_seat2, by.x=c("statenm", "countynm", "con
 
 ###
 
-governor <- lapply(paste0("governor_county//", list.files("governor_county/")), function(x) read.csv(x, stringsAsFactors = F, skip=2))
+governor <- lapply(paste0("original/elections/governor_county//", list.files("original/elections/governor_county/")), function(x) read.csv(x, stringsAsFactors = F, skip=2))
 governor <- do.call(rbind, governor)
 
 # some cases were erroneously coded as Texas elections when they were actually in Nevada
@@ -410,12 +407,11 @@ names(governor) <- c("statenm", "countynm",
 
 countyplus <- merge(countyplus, governor, by.x=c("statenm", "countynm", "con_raceYear"), by.y=c("statenm", "countynm", "gov_RaceDate"), all.x=T)
 
-unique(countyplus$fips[nchar(countyplus$fips)==4])
 countyplus$fips <- ifelse(nchar(countyplus$fips)==4, paste0("0", countyplus$fips), countyplus$fips)
 
 ###
 
-census <- read.csv("census_county.csv", stringsAsFactors = F)
+census <- read.csv("working/population_countylevel.csv", stringsAsFactors = F)
 census$decade <- census$decade + 2
 census$fips <- as.character(census$fips)
 census$fips[nchar(census$fips)==4] <- paste0("0", census$fips[nchar(census$fips)==4])
@@ -469,13 +465,6 @@ for(i in 1:nrow(countyplus)) {
   }
 }
 
-# for(i in c("con_DemVotes", "con_RepVotes", "con_ThirdVotes", "con_OtherVotes", "pres_RepVotes", "pres_DemVotes", "pres_OtherVotes",
-#            "sen1_DemVotes", "sen1_RepVotes", "sen1_ThirdVotes", "sen1_OtherVotes", "sen2_DemVotes", "sen2_RepVotes",
-#            "sen2_ThirdVotes", "sen2_OtherVotes", "gov_RepVotes", "gov_DemVotes", "gov_ThirdVotes", "gov_OtherVotes")) {
-#   countyplus[which(countyplus[,i]=="N/A"), i] <- 0
-#   countyplus[,i] <- gsub(",", "", countyplus[,i])
-# }
-
 ###
 
 names(countyplus) <- tolower(names(countyplus))
@@ -507,12 +496,6 @@ for(i in vars) {
   
 }
 
-# adminvars <- c("statenm", "cd", "con_raceyear", "con_repcandidate", "con_demcandidate", "con_repstatus", "con_demstatus",
-#                "con_repunopposed", "con_demunopposed", "pres_repcandidate", "pres_demcandidate",
-#                "pres_repstatus", "pres_demstatus", 
-#                "sen1_repcandidate", "sen1_demcandidate", "sen1_repstatus", "sen1_demstatus",
-#                "sen2_repcandidate", "sen2_demcandidate", "sen2_repstatus", "sen2_demstatus",
-#                "gov_repcandidate", "gov_demcandidate", "gov_repstatus", "gov_demstatus")
 adminvars <- c("statenm", "cd", "con_raceyear", "con_repcandidate", "con_demcandidate", "con_repstatus", "con_demstatus",
                "con_repunopposed", "con_demunopposed", "con_repvotes", "con_demvotes", "con_thirdvotes", "con_othervotes"
                #"pres_repcandidate", "pres_demcandidate", "pres_repstatus", "pres_demstatus",
@@ -571,7 +554,7 @@ for(i in popvars ) {
   cddata[, paste0(i, "_pct")] <- cddata[, i] / cddata$pop_total
 }
 
-write.csv(cddata, "cd_panel_full.csv", row.names=F)
+write.csv(cddata, "working/cd_panel_full.csv", row.names=F)
 
 
 

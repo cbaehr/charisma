@@ -2,8 +2,8 @@
 
 setwd("/Users/christianbaehr/Dropbox/charisma_project/data")
 
-rocio1 <- read.csv("condistrict_to_county_mapping_withcountynames_1952-82.csv")
-rocio2 <- read.csv("condistrict_to_county_mapping_withcountynames_1992-2012.csv")
+rocio1 <- read.csv("working/condistrict_to_county_mapping_withcountynames_1952-82.csv")
+rocio2 <- read.csv("working/condistrict_to_county_mapping_withcountynames_1992-2012.csv")
 
 ##column name
 colnames(rocio2)[3] <- "statenm"
@@ -20,7 +20,7 @@ rocio2$statenm <- new_str
 unique <- unique(rocio2[c("fips","countynm", "statenm")])
 result <- merge(rocio1, unique, by=c("countynm", "statenm"), all.x = TRUE)
 
-write.csv(result,"condistrict_to_county_mapping_withcountynames_1952-82_fips_added.csv")
+write.csv(result,"working/condistrict_to_county_mapping_withcountynames_1952-82_fips_added.csv")
 summary(is.na(result$fips)) ## 272 rows with missing fips
 
 
@@ -41,7 +41,7 @@ merged <- rbind(result, rocio2) ## 24401 obs in total
 ###
 
 # want to utilize the fips codes that Dahyun manually added to this dataset
-fips <- read.csv("condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_nomissingness_DONOTEDIT.csv", stringsAsFactors = F)
+fips <- read.csv("original/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_nomissingness_DONOTEDIT.csv", stringsAsFactors = F)
 
 temp <- merge(merged, fips[,c("countynm", "statenm", "year", "cd", "fips")], by=c("countynm", "statenm", "cd", "year"), all.x=T)
 
@@ -54,7 +54,7 @@ merged <- temp
 
 ###
 
-write.csv(merged, "condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv")
+write.csv(merged, "working/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv")
 
 summary(merged)
 
