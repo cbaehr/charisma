@@ -1,7 +1,7 @@
 
 library(PL94171)
 
-setwd("/Users/christianbaehr/Downloads/census_redistricting/census_redistricting_2000")
+setwd("/Users/christianbaehr/Desktop/data/original/census_redistricting/census_redistricting_2000")
 
 root2000a <- "https://www2.census.gov/census_2000/datasets/redistricting_file--pl_94-171/%s/%s00001.upl.zip"
 root2000b <- "https://www2.census.gov/census_2000/datasets/redistricting_file--pl_94-171/%s/%s00002.upl.zip"
@@ -184,7 +184,7 @@ allyears$unit_weight <- allyears$unit_pop / allyears$countypop
 
 #####
 
-setwd("/Users/christianbaehr/Dropbox/charisma_project/data/census_redistricting")
+setwd("original/census_redistricting")
 
 fips <- read.csv("fips_codes_clean.csv", stringsAsFactors = F)
 fips$fips <- as.character(fips$fips)
@@ -215,7 +215,7 @@ countyplusname <- merge(allyears, fips[, c("name", "fipschar")], by.x="fips", by
 test <- aggregate(countyplusname$con_district, by=list(countyplusname$year, countyplusname$state), FUN=function(x) length(unique(x)))
 # LOOKS GOOD!
 
-write.csv(countyplusname, "../condistrict_to_county_mapping_withcountynames_1992-2012.csv", row.names=F)
+write.csv(countyplusname, "../../working/condistrict_to_county_mapping_withcountynames_1992-2012.csv", row.names=F)
 
 ###
 
