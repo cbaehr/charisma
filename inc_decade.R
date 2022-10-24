@@ -27,19 +27,19 @@ View(congress[, c("con_raceyear", "statenm", "cd", "con_demshare", "voteshare_D_
 ############################################################
 
 unique(congress$con_demstatus)  ## 5088 Challenger, 5202 Incumbents, 520 NAs
-unique(congress$con_repstatus)  ##  5590  Challenber, 4293 Incumbnets, 927 NAs
+unique(congress$con_repstatus)  ##  5590  Challenber, 4293 Incumbents, 927 NAs
 congress$incumb <- ifelse(congress$con_demstatus == "Incumbent",1, 
                           ifelse(congress$con_repstatus == "Incumbent", -1,0 ))
 
 #open <- congress[which(congress$con_repstatus=="Challenger" & congress$con_demstatus=="Challenger"), ] ##1237 obs
 
-model1 <- lm(congress$con_demshare~ congress$voteshare_D_House_l1+factor(congress$decade))
+model1 <- lm(congress$con_demshare~ congress$voteshare_D_House_l1+ factor(congress$incumb))
 summary(model1)
 
-model2 <- lm(congress$con_demshare~ congress$voteshare_D_House_l1 + congress$incumb)
+model2 <- lm(congress$con_demshare~ congress$voteshare_D_House_l1 + factor(congress$incumb):factor(congress$decade))
 summary(model2)
 
-model3 <- lm(congress$con_demshare~ congress$voteshare_D_House_l1 + congress$incumb*factor(congress$decade))
+model3 <- lm(congress$con_demshare~ congress$voteshare_D_House_l1 + factor(congress$incumb)*factor(congress$decade))
 summary(model3)
 
 
