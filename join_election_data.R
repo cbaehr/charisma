@@ -469,7 +469,7 @@ for(i in 1:nrow(countyplus)) {
 
 names(countyplus) <- tolower(names(countyplus))
 
-countyplus <- countyplus[, !names(countyplus) %in% c("x", "decade", "year")]
+countyplus <- countyplus[, !names(countyplus) %in% c("x", "year")]
 
 # seats are also unopposed if both the candidate and status variables are NA for the other party
 countyplus$con_demunopposed[which(countyplus$con_repcandidate=="N/A" & countyplus$con_repstatus=="N/A")] <- T
@@ -553,6 +553,9 @@ popvars <- c("pop_male", "pop_over65", "pop_white", "pop_black", "pop_spanishori
 for(i in popvars ) {
   cddata[, paste0(i, "_pct")] <- cddata[, i] / cddata$pop_total
 }
+
+# dropping 19 cases in which incumbent and opponent coded as incumbent
+cddata <- cddata[which(!(cddata$con_repstatus=="Incumbent" & cddata$con_demstatus=="Incumbent")), ]
 
 write.csv(cddata, "working/cd_panel_full.csv", row.names=F)
 
