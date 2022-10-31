@@ -9,7 +9,7 @@ library(modelsummary)
 
 
 congress <- read.csv("cd_panel_full.csv")
-congress <- congress[order(congress$statenm, congress$cd, congress$con_raceyear), ]
+congress <- congress[order(congress$statenm, congress$cd, congress$con_raceyear, congress$con_demcandidate), ]
 
 min_years <- tapply(congress$year, INDEX=list(paste(congress$state, congress$district)), FUN=min, na.rm=T)
 if(any(min_years!=min(congress$year))) {stop("LAGGED VARIABLE WILL BE WRONG. PANEL START YEARS NOT IDENTICAL")}
@@ -41,6 +41,57 @@ summary(model2)
 
 model3 <- lm(congress$con_demshare~ congress$voteshare_D_House_l1 + factor(congress$incumb)*factor(congress$decade))
 summary(model3)
+
+
+
+
+############################################################
+##################Incumbency##########################
+############################################################
+library(data.table)
+
+congress <- read.csv("cd_panel_full.csv")
+congress <-congress [!(congress$con_demcandidate=="N/A"),]
+congress <- congress[order(congress $con_demcandidate, congress$con_raceyear, congress$statenm,congress$cd), ]
+setDT(congress)[, Seq := rleid(con_raceyear), by=con_demcandidate]
+congress <-congress[order(congress$con_demcandidate, congress$con_raceyear, congress$statenm, congress$cd), ]
+colnames(congress)[56] <- "term_count"
+
+
+par(3,1)
+
+K <- congress$term_count
+K.cut <- cut(K, c(0,1, 2, 4, 6, 8, 10, Inf))
+xax <- barplot(table(K.cut), xaxt='n')
+axis(1, at=xax, labels=c('1', '2', '3~4', '5~6', '7~8', '9~10', '> 10'))
+box(bty='L')
+
+
+
+K.cut <- cut(K, c(0,1, 2, 4, 7, 10, Inf))
+xax <- barplot(table(K.cut), xaxt='n')
+axis(1, at=xax, labels=c('1', '2', '3~4', '5~6', '7~9', '> 10'))
+box(bty='L')
+
+
+K.cut <- cut(K, c(0,1, 2, 4, 7, Inf))
+xax <- barplot(table(K.cut), xaxt='n')
+axis(1, at=xax, labels=c('1', '2', '3~4', '5~6', '> 7'))
+box(bty='L')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
