@@ -2,6 +2,7 @@
 setwd("/Users/christianbaehr/Dropbox/charisma_project/data/")
 
 library(readxl)
+library(stringi)
 
 ###
 
@@ -108,7 +109,7 @@ county$fips[which(county$countynm=="st louis city" & county$decade<1992)] <- 295
 
 ################################################################################
 
-congress <- lapply(paste0("original/congressdata/", list.files("original/congressdata")), function(x) read.csv(x, stringsAsFactors = F, skip=2))
+congress <- lapply(paste0("original/congressdata/", list.files("original/congressdata")), function(x) read.csv(x, stringsAsFactors = F, skip=2, fileEncoding = "cp1252"))
 congress <- do.call(rbind, congress)
 
 congress <- congress[which(congress$Office=="House"), ]
@@ -130,7 +131,6 @@ congress$cd[which(congress$statenm=="vermont")] <- 1
 congress$cd[which(congress$raceYear>=1982 & congress$statenm=="south dakota")] <- 1
 congress$cd[which(congress$raceYear>=1992 & congress$statenm=="montana")] <- 1
 congress$cd[which(congress$raceYear<1982 & congress$statenm=="nevada")] <- 1
-
 
 congress$countynm <- tolower(congress$Area)
 congress$countynm <- gsub("\\.", "", congress$countynm)
@@ -171,7 +171,7 @@ countyplus <- merge(county, congress, by = c("statenm", "cd", "decade"))
 ################################################################################
 
 files <- paste0("original/elections/", grep("president", list.files("original/elections"), value=T))
-pres <- lapply(files, function(x) read.csv(x, stringsAsFactors = F, skip=2))
+pres <- lapply(files, function(x) read.csv(x, stringsAsFactors = F, skip=2, fileEncoding = "cp1252"))
 pres <- do.call(rbind, pres)
 
 pres <- pres[which(pres$Office=="President"),]
@@ -235,7 +235,7 @@ countyplus <- countyplus[which(!(countyplus$statenm=="virginia" &
 
 ################################################################################
 
-senate <- lapply(paste0("original/elections/cq_senate_county/", list.files("original/elections/cq_senate_county")), function(x) read.csv(x, stringsAsFactors = F, skip=2))
+senate <- lapply(paste0("original/elections/cq_senate_county/", list.files("original/elections/cq_senate_county")), function(x) read.csv(x, stringsAsFactors = F, skip=2, fileEncoding = "cp1252"))
 senate <- do.call(rbind, senate)
 senate <- senate[which(senate$Office=="Senate"), ]
 
@@ -362,7 +362,7 @@ countyplus <- merge(countyplus, senate_seat2, by.x=c("statenm", "countynm", "con
 
 ###
 
-governor <- lapply(paste0("original/elections/governor_county//", list.files("original/elections/governor_county/")), function(x) read.csv(x, stringsAsFactors = F, skip=2))
+governor <- lapply(paste0("original/elections/governor_county//", list.files("original/elections/governor_county/")), function(x) read.csv(x, stringsAsFactors = F, skip=2, fileEncoding = "cp1252"))
 governor <- do.call(rbind, governor)
 
 # some cases were erroneously coded as Texas elections when they were actually in Nevada
@@ -572,14 +572,19 @@ for(i in popvars ) {
   cddata[, paste0(i, "_pct")] <- cddata[, i] / cddata$pop_total
 }
 
+
+which(grepl("Hinojosa", cddata$con_demcandidate))
+cddata$con_demcandidate[which(grepl("Hinojosa", cddata$con_demcandidate))]
+stri_trans_general("Hinojosa, Rubén", "Latin-ASCII")
+
+cddata[, c("con_repcandidate", "con_demcandidate", "con_thirdcandidate")] <- apply(cddata[, c("con_repcandidate", "con_demcandidate", "con_thirdcandidate")], 
+                                                                                   2, 
+                                                                                   FUN=function(x) stri_trans_general(x, "Latin-ASCII")) # remove accents from candidate names
+
 # dropping 19 cases in which incumbent and opponent coded as incumbent
 cddata <- cddata[which(!(cddata$con_repstatus=="Incumbent" & cddata$con_demstatus=="Incumbent")), ]
 
 write.csv(cddata, "working/cd_panel_full.csv", row.names=F)
-
-
-
-
 
 
 
