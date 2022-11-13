@@ -496,8 +496,8 @@ for(i in vars) {
   
 }
 
-adminvars <- c("statenm", "cd", "con_raceyear", "con_repcandidate", "con_demcandidate", "con_repstatus", "con_demstatus",
-               "con_repunopposed", "con_demunopposed", "con_repvotes", "con_demvotes", "con_thirdvotes", "con_othervotes"
+adminvars <- c("statenm", "cd", "con_raceyear", "con_repcandidate", "con_demcandidate", "con_thirdcandidate", "con_repstatus", "con_demstatus", "con_thirdstatus",
+               "con_repunopposed", "con_demunopposed", "con_repvotes", "con_demvotes", "con_thirdvotes", "con_othervotes", "con_pluralityvotes"
                #"pres_repcandidate", "pres_demcandidate", "pres_repstatus", "pres_demstatus",
                #"sen1_repcandidate", "sen1_demcandidate", "sen1_repstatus", "sen1_demstatus",
                #"sen2_repcandidate", "sen2_demcandidate", "sen2_repstatus", "sen2_demstatus",
@@ -510,7 +510,7 @@ cddata <- aggregate(countyplus[, vars],
                     by=adminvarlist, 
                     FUN=function(x) sum(x, na.rm=T))
 
-votevars <- c("con_repvotes", "con_demvotes", "con_thirdvotes", "con_othervotes") 
+votevars <- c("con_repvotes", "con_demvotes", "con_thirdvotes", "con_othervotes", "con_pluralityvotes") 
 for(i in votevars) {
   
   cddata[which(cddata[,i]=="N/A"), i] <- 0
@@ -518,6 +518,24 @@ for(i in votevars) {
   
   cddata[,i] <- as.numeric(cddata[,i])
 }
+
+###
+
+# test <- cddata2[which( (cddata2$con_othervotes > cddata2$con_thirdvotes) & cddata2$con_thirdvotes!=0 )[1:49], 
+#                 c("con_raceyear", "statenm", "cd", "con_repvotes", "con_demvotes", "con_thirdvotes", "con_othervotes", "con_thirdcandidate")]
+# View(test[order(test$statenm, test$cd, test$con_raceyear),]) # rest of this data is all good
+
+ind <- which(cddata$statenm=="wisconsin" & cddata$cd==4 & cddata$con_raceyear==2004)
+cddata$con_thirdvotes[ind] <- 3733
+cddata$con_thirdvotes[ind] <- 1861+897+341
+
+ind <- which(cddata$statenm=="louisiana" & cddata$cd==5 & cddata$con_raceyear==2020)
+cddata$con_repvotes[ind] <- 49182
+cddata$con_demvotes[ind] <- 0
+cddata$con_thirdvotes[ind] <- 30124
+cddata$con_othervotes[ind] <- 0
+
+###
 
 cddata$con_totalvotes <- cddata$con_repvotes + cddata$con_demvotes + cddata$con_thirdvotes + cddata$con_othervotes
 

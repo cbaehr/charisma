@@ -25,47 +25,14 @@ glance.rdrobust <- function(model, ...) {
   ret
 }
 
-#elections <- read.csv("working/cd_panel_full.csv", stringsAsFactors = F)
-elections <- read.csv("working/cd_panel_full_incumbency.csv", stringsAsFactors = F)
 
-###
-
-elec1972 <- read.csv("/Users/christianbaehr/Downloads/congress_1972_withincumblength.csv", stringsAsFactors = F)
-
-elec1972$statenm <- tolower(elec1972$State)
-elec1972$cd <- gsub("District ", "", elec1972$Area)
-
-elections <- merge(elections, elec1972, by = c("statenm", "cd"), all.x=T)
-
-elections$start72 <- (elections$con_raceyear - (2*elections$Incumbency) == 1972)
-
-View(elections[, c("statenm", "cd", "con_raceyear", "Incumbency", "incumblength")])
-
-###
+elections <- read.csv("working/cd_panel_full.csv", stringsAsFactors = F)
 
 elections$seat <- paste(elections$statenm, elections$cd)
 elections <- elections[order(elections$seat, elections$con_raceyear), ]
 
-###
-
-elections$con_thirdshare <- elections$con_thirdvotes/ 
-  apply(elections[,c("con_repvotes", "con_demvotes", "con_thirdvotes", "con_othervotes")], 1, sum)
-
-#con_demshare_twopty <- elections$con_demvotes / (elections$con_demvotes + elections$con_repvotes)
-elections$con_demshare_twopty <- ifelse(elections$con_demunopposed, 1,
-                                        ifelse(elections$con_repunopposed, 0, con_demshare_twopty))
-
-#con_repshare_twopty <- elections$con_repvotes / (elections$con_demvotes + elections$con_repvotes)
-elections$con_repshare_twopty <- ifelse(elections$con_repunopposed, 1,
-                                        ifelse(elections$con_demunopposed, 0, con_repshare_twopty))
-
-###
-
-sum(elections$con_pluralityvotes != abs(elections$con_demvotes - elections$con_repvotes), na.rm=T)
-
-View(elections[which(elections$con_pluralityvotes != abs(elections$con_demvotes - elections$con_repvotes)), c("statenm", "cd", "con_raceyear", "con_demvotes", "con_repvotes", "con_thirdvotes", "con_othervotes", "con_pluralityvotes")])
-
-View(elections[is.na(elections$con_demvotes), ])
+elections$con_demshare_twopty <- elections$con_demvotes / (elections$con_demvotes + elections$con_repvotes)
+elections$con_repshare_twopty <- elections$con_repvotes / (elections$con_demvotes + elections$con_repvotes)
 
 for(i in 1:nrow(elections)) { 
   if(i==1) {
@@ -129,6 +96,28 @@ openseats <- openseats[which(!(openseats$con_demshare_tplus1 %in% c(0, 100))), ]
 
 ### COMPARE ESTIMATES TO QJPS 2015 ###
 
+rocio <- read.csv("/Users/christianbaehr/Downloads/100/EriksonTitiunik-QJPS-data.csv", stringsAsFactors = F)
+rocio <- rocio[rocio$use==1, ]
+
+pdf("../results/RDDvars_hist.pdf", width=11, height=8)
+par(mfrow=c(2, 2))
+hist(rocio$demmvlag, breaks = 8, main = "QJPS 2015", xlab=" ", yaxt="n", ylab="")
+hist(openseats$demmv, breaks=8, main="Our sample", xlab=" ", yaxt="n", ylab="")
+mtext("Democratic margin of victory in period t", side=1, outer=T, line=-26)
+hist(rocio$demvotesh, breaks = 8, main = " ", xlab=" ", yaxt="n", ylab="")
+hist(openseats$con_demshare_tplus1, breaks=8, main=" ", xlab=" ", yaxt="n", ylab="")
+mtext("Democratic vote share t+1", side=1, outer=T, line=-2)
+dev.off()
+
+
+###
+
+lm1 <- lm(con_demshare_tplus1 ~ I + con_demshare, data = openseats)
+lm2 <- lm(con_demshare_tplus1 ~ I + con_demshare + factor(con_raceyear), data = openseats)
+lm3 <- lm(con_demshare_tplus1 ~ I + con_demshare + pres_demshare + factor(con_raceyear), data = openseats)
+
+models <- list(lm1=lm1, lm2=lm2, lm3=lm3)
+
 rdd <- rdrobust(y=openseats$con_demshare_tplus1, x=openseats$demmv, c=0, bwselect = "mserd")
 rdd$coef <- rdd$coef/2 # divide effect by two
 rdd$ci <- rdd$ci/2
@@ -153,6 +142,70 @@ modelsummary(models,
              add_rows = data.frame(matrix(c(
                "Year FE", " ", "X", "X", " ", " ", " ", " ", " ", " "
              ), ncol = 10, byrow=T)))
+
+###
+
+dfloor <- function(x) {return(((x-2) %/% 10) *10 + 2)}
+
+rocio$decade <- dfloor(as.numeric(rocio$year))
+
+models <- list()
+
+rdd <- rdrobust(y=rocio$demvotesh, x=rocio$demmvlag, c=0, bwselect = "mserd") 
+rdd$coef <- rdd$coef/2 # divide effect by two
+rdd$ci <- rdd$ci/2
+
+models[["rdall"]] <- rdd # rdd using using 196 obs. Checked with STATA replication
+
+for(i in sort(unique(rocio$decade))) {
+  
+  rdd <- rdrobust(y=rocio$demvotesh[rocio$decade==i],
+                  x=rocio$demmvlag[rocio$decade==i], c=0, bwselect = "mserd")
+  rdd$coef <- rdd$coef/2 # divide effect by two
+  rdd$ci <- rdd$ci/2
+  
+  models[[paste0("rd", i)]] <- rdd
+  
+}
+
+modelsummary(models, 
+             output = "../results/RDDestimates_QJPSreplication.tex", 
+             coef_omit= "Intercept|factor|Conventional|Bias", stars=F,
+             gof_omit = "Std|BIC|AIC|Log|Adj|R2|F",
+             statistic = "conf.int")
+
+# openseats$cd <- ifelse(nchar(openseats$cd)==2, openseats$cd, paste0("0", openseats$cd))
+# openseats$state <- match(openseats$statenm, tolower(state.name))
+# openseats$stcd <- paste0(openseats$state, openseats$cd)
+# 
+# openseats$rocioyear <- openseats$con_raceyear + 2
+# openseats$stcdyr <- paste0(openseats$stcd, openseats$rocioyear)
+# rocio$stcdyr <- paste0(rocio$stcd, rocio$year)
+# 
+# test <- merge(openseats[, c("statenm", "cd", "con_raceyear", "stcdyr", "con_demshare_cutoff", "con_demshare_tplus1")],
+#               rocio[, c("stcdyr", "demvotesh", "demmvlag")],
+#               by="stcdyr")
+# View(test)
+# 
+# mod1_r <- rdrobust(y=rocio$demvotesh[rocio$use==1], x = rocio$demmvlag[rocio$use==1], c=0)
+# summary(mod1_r)
+# 
+# hist(rocio$demmvlag[rocio$use==1])
+# hist(openseats$con_demshare_twopty[openseats$con_raceyear<2010])
+# hist(openseats$con_demshare_twopty[openseats$stcdyr %in% rocio$stcdyr] - 0.5)
+# 
+# summary(openseats$con_demshare_twopty_tplus1[openseats$stcdyr %in% rocio$stcdyr])
+# summary(rocio$demvotesh[rocio$use==1 & rocio$stcdyr %in% openseats$stcdyr])
+# 
+# mod1_r <- rdrobust(y=rocio$demvotesh[rocio$use==1 & rocio$stcdyr %in% openseats$stcdyr],
+#                    x = rocio$demmvlag[rocio$use==1 & rocio$stcdyr %in% openseats$stcdyr],
+#                    c=0)
+# summary(mod1_r)
+# 
+# mod1 <- rdrobust(y=openseats$con_demshare_tplus1[openseats$stcdyr %in% rocio$stcdyr],
+#                  x=openseats$con_demshare_cutoff[openseats$stcdyr %in% rocio$stcdyr])
+# summary(mod1)
+
 
 
 
