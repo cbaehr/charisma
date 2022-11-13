@@ -9,7 +9,11 @@ library(modelsummary)
 
 
 congress <- read.csv("cd_panel_full.csv")
-congress <- congress[order(congress$statenm, congress$cd, congress$con_raceyear, congress$con_demcandidate), ]
+congress <- congress[order(congress$con_demcandidate,congress$con_raceyear, congress$statenm,congress$cd), ]
+
+
+
+
 
 min_years <- tapply(congress$year, INDEX=list(paste(congress$state, congress$district)), FUN=min, na.rm=T)
 if(any(min_years!=min(congress$year))) {stop("LAGGED VARIABLE WILL BE WRONG. PANEL START YEARS NOT IDENTICAL")}
