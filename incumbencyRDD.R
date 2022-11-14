@@ -154,6 +154,44 @@ modelsummary(models,
                "Year FE", " ", "X", "X", " ", " ", " ", " ", " ", " "
              ), ncol = 10, byrow=T)))
 
+###
+
+
+elections <- read.csv("working/congress_demterm_hand_corrected_bin.csv", stringsAsFactors = F)
+elections$demmv <- (elections$con_demshare - elections$con_repshare) # running variable is margin of victory in percentage points of total vote share
+
+dfloor <- function(x) {
+  return(((x-2) %/% 10) *10 + 2)
+}
+elections$decade <- dfloor(elections$con_raceyear)
+
+rdd <- rdrobust(y=openseats$con_demshare_tplus1, x=openseats$demmv, c=0, bwselect = "mserd")
+
+
+rdd <- rdrobust(y=elections$con_incumbency, x=elections$demmv, c=0, bwselect = "mserd")
+
+
+for(i in unique(elections$decade)) {
+  if(i==unique(elections$decade)[1]) {
+    out <- matrix(data=NA, nrow = length(unique(elections$dem_inc_bin)), ncol = length(unique(elections$decade)))
+    rownames(out) <- unique(elections$dem_inc_bin)
+    colnames(out) <- unique(elections$decade)
+  }
+  
+  for(j in unique(elections$dem_inc_bin)) {
+    
+    temp <- elections[which(elections$decade==i & elections$dem_inc_bin==j), ]
+    
+    rdd <- rdrobust(y=temp$con_incumbency, x=temp$demmv, c=0, bwselect = "mserd")
+    
+    out[as.character(j), as.character(i)] <- rdd$Estimate[[1]]
+    
+  }
+}
+
+
+
+
 
 
 
