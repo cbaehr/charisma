@@ -8,15 +8,11 @@ library(modelsummary)
 ############################################################
 
 
-congress <- read.csv("cd_panel_full.csv")
-congress <- congress[order(congress$con_demcandidate,congress$con_raceyear, congress$statenm,congress$cd), ]
+congress <- read.csv("cd_panel_full_LOCincumb.csv")
+congress <- congress[order(congress$con_demcandidate,congress$con_raceyear, congress$statenm,congress$cd, congress$con_incumbency), ]
 
-
-
-
-
-min_years <- tapply(congress$year, INDEX=list(paste(congress$state, congress$district)), FUN=min, na.rm=T)
-if(any(min_years!=min(congress$year))) {stop("LAGGED VARIABLE WILL BE WRONG. PANEL START YEARS NOT IDENTICAL")}
+#min_years <- tapply(congress$year, INDEX=list(paste(congress$state, congress$district)), FUN=min, na.rm=T)
+#if(any(min_years!=min(congress$year))) {stop("LAGGED VARIABLE WILL BE WRONG. PANEL START YEARS NOT IDENTICAL")}
 
 congress$voteshare_D_House_l1 <- c(NA, congress$con_demshare[1:(nrow(congress)-1)])
 congress$voteshare_D_House_l1[congress$year==min(congress$year)] <- NA
@@ -54,12 +50,35 @@ summary(model3)
 ############################################################
 library(data.table)
 
-congress <- read.csv("cd_panel_full.csv")
+#, congress$con_demstatusm, congress$con_repstatus
+congress <- read.csv("cd_panel_full_LOCincumb.csv")
 congress <-congress [!(congress$con_demcandidate=="N/A"),]
-congress <- congress[order(congress $con_demcandidate, congress$con_raceyear, congress$statenm,congress$cd), ]
-setDT(congress)[, Seq := rleid(con_raceyear), by=con_demcandidate]
-congress <-congress[order(congress$con_demcandidate, congress$con_raceyear, congress$statenm, congress$cd), ]
-colnames(congress)[56] <- "term_count"
+congress <- congress[order(congress $con_demcandidate, congress$con_raceyear, congress$statenm,congress$cd, congress$con_incumbency), ]
+
+
+#setDT(congress)[, Seq := rleid(con_raceyear), by=con_demcandidate]
+#congress$Seq <- congress$Seq-1
+#congress_seq<-subset(congress, select=c("con_demcandidate","con_raceyear", "statenm", "cd","Seq","con_incumbency","con_demstatus"))
+#congress <-congress[order(congress$con_demcandidate, congress$con_raceyear, congress$statenm, congress$cd), ]
+
+## "congress_demterm_hand_corrected.csv" is hand-corrected version
+## Corrections includes 1) candidates in 1972 elections 2) candidates whose first election is missing 3) candidates who lost in 
+
+corrected <- read.csv("congress_demterm_hand_corrected.csv")
+
+##con_dem_inc_count = term counts (dem candidates)
+##dem_inc_bin - 4 bins
+congress$con_dem_inc_count <- corrected$dem_termcount
+
+congress$dem_inc_bin <- ifelse(congress$con_dem_inc_count ==0,0, 
+                       ifelse(congress$con_dem_inc_count ==1, 1,
+                              ifelse(congress$con_dem_inc_count ==2 |congress$con_dem_inc_count ==3, 2,
+                                     ifelse(congress$con_dem_inc_count>3, 4, "NA"))))
+
+#write.csv(congress, "congress_demterm_hand_corrected_bin.csv")
+
+congressaa<- subset(congress, select=c("con_demcandidate","con_raceyear", "statenm", "cd","bin","con_dem_inc_count","con_demstatus"))
+
 
 
 par(3,1)
