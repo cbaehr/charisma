@@ -114,11 +114,12 @@ congress <- do.call(rbind, congress)
 
 congress <- congress[which(congress$Office=="House"), ]
 
+congress$raceYear <- as.numeric(congress$raceYear)
+congress <- congress[which(congress$raceYear>=1972), ]
+
 congress$statenm <- tolower(congress$State)
 
 congress$cd <- gsub("District ", "", congress$Area)
-
-congress$raceYear <- as.numeric(congress$raceYear)
 
 # for some reason the CQ data only includes one observation for michigan in 2010. So I omit the election entirely
 congress <- congress[which(!(congress$statenm=="michigan" & congress$raceYear==2010)), ]
@@ -131,6 +132,16 @@ congress$cd[which(congress$statenm=="vermont")] <- 1
 congress$cd[which(congress$raceYear>=1982 & congress$statenm=="south dakota")] <- 1
 congress$cd[which(congress$raceYear>=1992 & congress$statenm=="montana")] <- 1
 congress$cd[which(congress$raceYear<1982 & congress$statenm=="nevada")] <- 1
+congress$cd[which(congress$statenm=="alaska")] <- 1
+congress$DemVotes[which(congress$statenm=="arkansas" & congress$cd==4 & congress$raceYear==1978)] <- "Unopposed"
+congress$DemCandidate[which(congress$statenm=="arkansas" & congress$cd==4 & congress$raceYear==1978)] <- "Thornton, Ray"
+congress$DemVotes[which(congress$statenm=="florida" & congress$cd==3 & congress$raceYear==1974)] <- "Unopposed"
+congress$RepVotes[which(congress$statenm=="louisiana" & congress$cd==4 & congress$raceYear==1996)] <- 94822
+congress$DemVotes[which(congress$statenm=="louisiana" & congress$cd==4 & congress$raceYear==1996)] <- 38015
+congress$RepVotes[which(congress$statenm=="florida" & congress$cd==12 & congress$raceYear==1990)] <- "Unopposed"
+congress$DemVotes[which(congress$statenm=="florida" & congress$cd==16 & congress$raceYear==1990)] <- "Unopposed"
+congress$DemVotes[which(congress$statenm=="florida" & congress$cd==3 & congress$raceYear==1986)] <- "Unopposed"
+congress$DemVotes[which(congress$statenm=="arkansas" & congress$cd==4 & congress$raceYear==2004)] <- "Unopposed"
 
 congress$countynm <- tolower(congress$Area)
 congress$countynm <- gsub("\\.", "", congress$countynm)
@@ -160,13 +171,25 @@ names(congress) <- c("statenm", "cd", "decade",
                                       "PluralityVotes", "RepVotesMajorPercent", "DemVotesMajorPercent", "ThirdVotesTotalPercent",
                                       "RepCandidate", "RepStatus", "DemCandidate", "DemStatus", "ThirdCandidate", "ThirdStatus")))
 
-congress$con_RepUnopposed <- congress$con_RepVotes=="Unopposed"
-congress$con_DemUnopposed <- congress$con_DemVotes=="Unopposed"
+congress$con_DemUnopposed <- (congress$con_RepVotes=="N/A" & congress$con_DemVotes!="N/A" & congress$con_ThirdVotes=="N/A" & congress$con_OtherVotes=="N/A")
+congress$con_RepUnopposed <- (congress$con_RepVotes!="N/A" & congress$con_DemVotes=="N/A" & congress$con_ThirdVotes=="N/A" & congress$con_OtherVotes=="N/A")
+congress$con_ThirdUnopposed <- (congress$con_RepVotes=="N/A" & congress$con_DemVotes=="N/A" & congress$con_ThirdVotes!="N/A" & congress$con_OtherVotes=="N/A")
 
-congress <- congress[congress$con_raceYear>=1972, ]
+#shift <- congress$con_ThirdVotes=="N/A" & congress$con_OtherVotes!="N/A"
+#congress$con_ThirdVotes[shift] <- congress$con_OtherVotes
+
+# problem - Dem candidates who have no Republic or third party challenger, but there are still "Other Votes"
+# there is no way to identify the vote total of the candidate who received the NEXT MOST votes, we can only compute
+# the entire basket of votes that "other" candidates received. 
 
 # district 13 in California and district 3 in kentucky have no districts. Otherwise all have matches.
 countyplus <- merge(county, congress, by = c("statenm", "cd", "decade"))
+
+a <- paste(county$statenm, county$cd, county$decade)
+b <- paste(congress$statenm, congress$cd, congress$decade)
+sum(a %in% b)
+sum(b %in% a)
+sort(b[!(b %in% a)]) # these are all the cases we have no match in the county data for - CREATE THESE CASES
 
 ################################################################################
 
@@ -247,8 +270,8 @@ senate$countynm <- trimws(senate$countynm)
 senate$RaceDate <- as.numeric(senate$RaceDate)
 senate$RaceDate <- as.numeric(substr(senate$RaceDate, 1, 4))
 
-senate$RepUnopposed <- senate$RepVotes=="Unopposed"
-senate$DemUnopposed <- senate$DemVotes=="Unopposed"
+senate$RepUnopposed <- (senate$RepVotes!="N/A" & senate$DemVotes=="N/A" & senate$ThirdVotes=="N/A" & senate$OtherVotes=="N/A")
+senate$DemUnopposed <- (senate$RepVotes=="N/A" & senate$DemVotes!="N/A" & senate$ThirdVotes=="N/A" & senate$OtherVotes=="N/A")
 
 drop <- (duplicated(senate[, c("statenm", "countynm", "RaceDate")]) | duplicated(senate[, c("statenm", "countynm", "RaceDate")], fromLast = T)) & 
   (senate$RepVotes=="N/A" & senate$DemVotes=="N/A") & (senate$statenm %in% c("georgia", "alaska"))
@@ -407,9 +430,9 @@ names(governor) <- c("statenm", "countynm",
 
 countyplus <- merge(countyplus, governor, by.x=c("statenm", "countynm", "con_raceYear"), by.y=c("statenm", "countynm", "gov_RaceDate"), all.x=T)
 
-countyplus$fips <- ifelse(nchar(countyplus$fips)==4, paste0("0", countyplus$fips), countyplus$fips)
-
 ###
+
+countyplus$fips <- ifelse(nchar(countyplus$fips)==4, paste0("0", countyplus$fips), countyplus$fips)
 
 census <- read.csv("working/population_countylevel.csv", stringsAsFactors = F)
 census$decade <- census$decade + 2
@@ -469,11 +492,7 @@ for(i in 1:nrow(countyplus)) {
 
 names(countyplus) <- tolower(names(countyplus))
 
-countyplus <- countyplus[, !names(countyplus) %in% c("x", "year")]
-
-# seats are also unopposed if both the candidate and status variables are NA for the other party
-countyplus$con_demunopposed[which(countyplus$con_repcandidate=="N/A" & countyplus$con_repstatus=="N/A")] <- T
-countyplus$con_repunopposed[which(countyplus$con_demcandidate=="N/A" & countyplus$con_demstatus=="N/A")] <- T
+countyplus <- countyplus[, setdiff(names(countyplus), c("x", "year"))]
 
 ###
 
@@ -498,6 +517,7 @@ for(i in vars) {
 
 adminvars <- c("statenm", "cd", "con_raceyear", "con_repcandidate", "con_demcandidate", "con_thirdcandidate", "con_repstatus", "con_demstatus", "con_thirdstatus",
                "con_repunopposed", "con_demunopposed", "con_repvotes", "con_demvotes", "con_thirdvotes", "con_othervotes", "con_pluralityvotes"
+              
                #"pres_repcandidate", "pres_demcandidate", "pres_repstatus", "pres_demstatus",
                #"sen1_repcandidate", "sen1_demcandidate", "sen1_repstatus", "sen1_demstatus",
                #"sen2_repcandidate", "sen2_demcandidate", "sen2_repstatus", "sen2_demstatus",
@@ -541,29 +561,31 @@ cddata$con_totalvotes <- cddata$con_repvotes + cddata$con_demvotes + cddata$con_
 
 cddata$con_repshare <- cddata$con_repvotes / cddata$con_totalvotes
 cddata$con_repshare[which(cddata$con_repunopposed)] <- 1
+#cddata$con_repshare[which(cddata$con_demunopposed | cddata$con_thirdunopposed)] <- 0
 cddata$con_repshare[which(cddata$con_demunopposed)] <- 0
 
 cddata$con_demshare <- cddata$con_demvotes / cddata$con_totalvotes
 cddata$con_demshare[which(cddata$con_demunopposed)] <- 1
+#cddata$con_demshare[which(cddata$con_repunopposed | cddata$con_thirdunopposed)] <- 0
 cddata$con_demshare[which(cddata$con_repunopposed)] <- 0
 
-cddata$pres_totalvotes <- cddata$pres_repvotes + cddata$pres_demvotes + cddata$pres_othervotes
+cddata$con_thirdshare <- cddata$con_thirdvotes / cddata$con_totalvotes
+#cddata$con_thirdshare[which(cddata$con_thirdunopposed)] <- 1
+#cddata$con_thirdshare[which(cddata$con_demunopposed | cddata$con_repunopposed)] <- 0
 
+cddata$pres_totalvotes <- cddata$pres_repvotes + cddata$pres_demvotes + cddata$pres_othervotes
 cddata$pres_repshare <- cddata$pres_repvotes / cddata$pres_totalvotes
 cddata$pres_demshare <- cddata$pres_demvotes / cddata$pres_totalvotes
 
 cddata$sen1_totalvotes <- cddata$sen1_demvotes + cddata$sen1_repvotes + cddata$sen1_thirdvotes + cddata$sen1_othervotes
-
 cddata$sen1_repshare <- cddata$sen1_repvotes / cddata$sen1_totalvotes
 cddata$sen1_demshare <- cddata$sen1_demvotes / cddata$sen1_totalvotes
 
 cddata$sen2_totalvotes <- cddata$sen2_demvotes + cddata$sen2_repvotes + cddata$sen2_thirdvotes + cddata$sen2_othervotes
-
 cddata$sen2_repshare <- cddata$sen2_repvotes / cddata$sen2_totalvotes
 cddata$sen2_demshare <- cddata$sen2_demvotes / cddata$sen2_totalvotes
 
 cddata$gov_totalvotes <- cddata$gov_repvotes + cddata$gov_demvotes + cddata$gov_thirdvotes + cddata$gov_othervotes
-
 cddata$gov_repshare <- cddata$gov_repvotes / cddata$gov_totalvotes
 cddata$gov_demshare <- cddata$gov_demvotes / cddata$gov_totalvotes
 
@@ -572,19 +594,23 @@ for(i in popvars ) {
   cddata[, paste0(i, "_pct")] <- cddata[, i] / cddata$pop_total
 }
 
-
-which(grepl("Hinojosa", cddata$con_demcandidate))
-cddata$con_demcandidate[which(grepl("Hinojosa", cddata$con_demcandidate))]
-stri_trans_general("Hinojosa, Rubén", "Latin-ASCII")
-
 cddata[, c("con_repcandidate", "con_demcandidate", "con_thirdcandidate")] <- apply(cddata[, c("con_repcandidate", "con_demcandidate", "con_thirdcandidate")], 
                                                                                    2, 
                                                                                    FUN=function(x) stri_trans_general(x, "Latin-ASCII")) # remove accents from candidate names
 
 # dropping 19 cases in which incumbent and opponent coded as incumbent
-cddata <- cddata[which(!(cddata$con_repstatus=="Incumbent" & cddata$con_demstatus=="Incumbent")), ]
+#cddata <- cddata[which(!(cddata$con_repstatus=="Incumbent" & cddata$con_demstatus=="Incumbent")), ]
 
 write.csv(cddata, "working/cd_panel_full.csv", row.names=F)
+
+###
+
+temp <- read.csv("original/congress_demterm_hand_corrected_bin_DONOTEDIT.csv", stringsAsFactors = F)
+temp <- temp[, c("statenm", "cd", "con_raceyear", "con_dem_inc_count", "dem_inc_bin")]
+
+out <- merge(cddata, temp)
+
+write.csv(out, "working/cd_panel_full.csv", row.names=F)
 
 
 
