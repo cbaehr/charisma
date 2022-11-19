@@ -70,15 +70,14 @@ corrected <- read.csv("congress_demterm_hand_corrected.csv")
 ##dem_inc_bin - 4 bins
 congress$con_dem_inc_count <- corrected$dem_termcount
 
-congress$dem_inc_bin <- ifelse(congress$con_dem_inc_count ==0,0, 
-                       ifelse(congress$con_dem_inc_count ==1, 1,
-                              ifelse(congress$con_dem_inc_count ==2 |congress$con_dem_inc_count ==3, 2,
-                                     ifelse(congress$con_dem_inc_count>3, 4, "NA"))))
+congress$dem_inc_bin <- ifelse(congress$con_dem_inc_count_v2 ==0,0, 
+                       ifelse(congress$con_dem_inc_count_v2 ==1, 1,
+                              ifelse(congress$con_dem_inc_count_v2 ==2 |congress$con_dem_inc_count ==3, 2,
+                                     ifelse(congress$con_dem_inc_count_v2>3, 3, "NA"))))
 
-#write.csv(congress, "congress_demterm_hand_corrected_bin.csv")
+write.csv(congress, "incumbency_complete.csv")
 
-congressaa<- subset(congress, select=c("con_demcandidate","con_raceyear", "statenm", "cd","bin","con_dem_inc_count","con_demstatus"))
-
+congress<- read.csv("incumbency_handcorrected2.csv")
 
 
 par(3,1)
