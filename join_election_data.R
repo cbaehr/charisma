@@ -605,8 +605,9 @@ write.csv(cddata, "working/cd_panel_full.csv", row.names=F)
 
 ###
 
-temp <- read.csv("original/congress_demterm_hand_corrected_bin_DONOTEDIT.csv", stringsAsFactors = F)
-temp <- temp[, c("statenm", "cd", "con_raceyear", "con_dem_inc_count", "dem_inc_bin")]
+temp <- read.csv("original/incumbency_complete.csv", stringsAsFactors = F)
+temp <- temp[, c("statenm", "cd", "con_raceyear", "con_dem_inc_count", "con_dem_inc_count_v2", "dem_inc_bin")]
+names(temp) <- c("statenm", "cd", "con_raceyear", "dem_inc_count_consecutive", "dem_inc_count_cumulative", "dem_inc_bin")
 
 out <- merge(cddata, temp)
 
