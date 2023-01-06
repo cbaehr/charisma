@@ -3,11 +3,12 @@ setwd("/Users/christianbaehr/Dropbox/charisma_project/data/")
 
 library(rdrobust)
 library(modelsummary)
+library(xtable)
 
 tidy.rdrobust <- function(model, ...) {
   ret <- data.frame(
     term = row.names(model$coef),
-    estimate = model$coef[, 1],
+    estimate = model$coef[1,],
     std.error = model$se[, 1],
     p.value = model$pv[, 1],
     conf.low=model$ci[,1],
@@ -25,169 +26,277 @@ glance.rdrobust <- function(model, ...) {
   ret
 }
 
-#elections <- read.csv("working/cd_panel_full.csv", stringsAsFactors = F)
-elections <- read.csv("working/cd_panel_full_incumbency.csv", stringsAsFactors = F)
-
 ###
 
-elec1972 <- read.csv("/Users/christianbaehr/Downloads/congress_1972_withincumblength.csv", stringsAsFactors = F)
+elections <- read.csv("working/cd_panel_full.csv", stringsAsFactors = F)
 
-elec1972$statenm <- tolower(elec1972$State)
-elec1972$cd <- gsub("District ", "", elec1972$Area)
+elections$decade <- sapply(elections$con_raceyear, FUN=function(x) (((x-2) %/% 10) *10 + 2))
 
-elections <- merge(elections, elec1972, by = c("statenm", "cd"), all.x=T)
+elections$highestshare_nondem <- apply(elections[, c("con_repshare", "con_thirdshare")], 1, FUN=function(x) max(x, na.rm=T))
 
-elections$start72 <- (elections$con_raceyear - (2*elections$Incumbency) == 1972)
+elections$demmv <- elections$con_demshare - elections$highestshare_nondem # difference between Dem share and next most competitive candidate
 
-View(elections[, c("statenm", "cd", "con_raceyear", "Incumbency", "incumblength")])
+elections$incumb_running <- ifelse(elections$dem_inc_count_cumulative>0 | elections$con_repstatus=="Incumbent", 1, 0) # should I be using consecutive?
 
-###
-
-elections$seat <- paste(elections$statenm, elections$cd)
-elections <- elections[order(elections$seat, elections$con_raceyear), ]
-
-###
-
-elections$con_thirdshare <- elections$con_thirdvotes/ 
-  apply(elections[,c("con_repvotes", "con_demvotes", "con_thirdvotes", "con_othervotes")], 1, sum)
-
-#con_demshare_twopty <- elections$con_demvotes / (elections$con_demvotes + elections$con_repvotes)
-elections$con_demshare_twopty <- ifelse(elections$con_demunopposed, 1,
-                                        ifelse(elections$con_repunopposed, 0, con_demshare_twopty))
-
-#con_repshare_twopty <- elections$con_repvotes / (elections$con_demvotes + elections$con_repvotes)
-elections$con_repshare_twopty <- ifelse(elections$con_repunopposed, 1,
-                                        ifelse(elections$con_demunopposed, 0, con_repshare_twopty))
-
-###
-
-sum(elections$con_pluralityvotes != abs(elections$con_demvotes - elections$con_repvotes), na.rm=T)
-
-View(elections[which(elections$con_pluralityvotes != abs(elections$con_demvotes - elections$con_repvotes)), c("statenm", "cd", "con_raceyear", "con_demvotes", "con_repvotes", "con_thirdvotes", "con_othervotes", "con_pluralityvotes")])
-
-View(elections[is.na(elections$con_demvotes), ])
-
-for(i in 1:nrow(elections)) { 
-  if(i==1) {
-    seat <- elections$seat[i]
-    seatdat <- elections[which(elections$seat==seat), ]
-    elections$con_demshare_twopty_tplus1 <- elections$con_repshare_twopty_tplus1 <- NA
-    elections$con_demshare_tplus1 <- elections$con_repshare_tplus1 <- NA
-    elections$con_demvotes_tplus1 <- elections$con_repvotes_tplus1 <- elections$con_thirdvotes_tplus1 <- NA
-    elections$con_demcandidate_tplus1 <- elections$con_repcandidate_tplus1 <- NA
-    
-  } else if(elections$seat[i]!=seat) {
-    seat <- elections$seat[i]
-    seatdat <- elections[which(elections$seat==seat), ]
-  }
-  tplus1 <- elections$con_raceyear[i] + 2 # the election year of t+1
-  ind <- which(seatdat$con_raceyear==tplus1)
-  if(length(ind)>0) {
-    #computing the one period forward lagged value of vote share
-    elections$con_demshare_tplus1[i] <- seatdat$con_demshare[ind]
-    elections$con_repshare_tplus1[i] <- seatdat$con_repshare[ind]
-    elections$con_demshare_twopty_tplus1[i] <- seatdat$con_demshare_twopty[ind]
-    elections$con_repshare_twopty_tplus1[i] <- seatdat$con_repshare_twopty[ind]
-    elections$con_demvotes_tplus1[i] <- seatdat$con_demvotes[ind]
-    elections$con_repvotes_tplus1[i] <- seatdat$con_repvotes[ind]
-    elections$con_thirdvotes_tplus1[i] <- seatdat$con_thirdvotes[ind]
-    elections$con_demcandidate_tplus1[i] <- seatdat$con_demcandidate[ind]
-    elections$con_repcandidate_tplus1[i] <- seatdat$con_repcandidate[ind]
+elections$con_demshare_tplus1 <- elections$incumb_running_tplus1 <- elections$demmv_tplus1 <-  NA
+for(i in 1:nrow(elections)) { # creating forward-lagged dummies of Dem vote share and "incumbent running" indicator
+  
+  ind <- which(elections$statenm==elections$statenm[i] & 
+                 elections$cd==elections$cd[i] & 
+                 elections$con_raceyear == (elections$con_raceyear[i]+2) ) # find the t+1 observation for unit i
+  
+  if(length(ind)>0) { # if such an observation exists
+    elections$con_demshare_tplus1[i] <- elections$con_demshare[ind]
+    elections$incumb_running_tplus1[i] <- elections$incumb_running[ind]
+    elections$demmv_tplus1[i] <- elections$demmv[ind]
   }
 }
 
-openseats <- elections[which(elections$con_repstatus=="Challenger" & elections$con_demstatus=="Challenger"), ] 
-
-south <- c("alabama", "arkansas", "florida", "georgia", "kentucky", "louisiana", "maryland", "mississippi", "north carolina", "oklahoma", "south carolina", "tennessee", "texas", "virginia", "west virginia")
-openseats <- openseats[!(openseats$statenm %in% south), ] # excluding southern states
-
-# drop cases when redistricting occurs between open seat election and freshman election
-openseats <- openseats[!(openseats$con_raceyear %% 10==0), ]
-
-demincumbent <- (openseats$con_demshare_twopty > openseats$con_repshare_twopty) & openseats$con_demcandidate==openseats$con_demcandidate_tplus1
-repincumbent <- (openseats$con_demshare_twopty < openseats$con_repshare_twopty) & openseats$con_repcandidate==openseats$con_repcandidate_tplus1
-
-openseats$I <- ifelse(demincumbent, 1,
-                      ifelse(repincumbent, -1, 0))
-openseats <- openseats[which(openseats$I!=0), ] # only use obs where incumbent is running in t+1
-
-bernie <- (openseats$con_demvotes_tplus1 < openseats$con_thirdvotes_tplus1) & (openseats$con_repvotes_tplus1 < openseats$con_thirdvotes_tplus1) # NOT USING TWO PARTY VOTE SHARE BC ROCIO QJPS DID NOT
-openseats <- openseats[!bernie, ]
-
-openseats$demmv <- (openseats$con_demshare - openseats$con_repshare) # running variable is margin of victory in percentage points of total vote share
-# NOT USING TWO PARTY VOTE SHARE BC ROCIO QJPS DID NOT
-
-openseats$con_demshare_tplus1 <- openseats$con_demshare_tplus1*100 # multiply covars by 100 to match Rocios variables
-openseats$con_demshare <- openseats$con_demshare*100
-openseats$pres_demshare <- openseats$pres_demshare*100
-
-# do we want to estimate only for a single decade? Since congressional districts change from one decade
-# to the next
-
-# should we omit races where incumbent was unopposed in t+1?
-openseats <- openseats[which(!(openseats$con_demshare_tplus1 %in% c(0, 100))), ]
-
-### COMPARE ESTIMATES TO QJPS 2015 ###
-
-rdd <- rdrobust(y=openseats$con_demshare_tplus1, x=openseats$demmv, c=0, bwselect = "mserd")
-rdd$coef <- rdd$coef/2 # divide effect by two
-rdd$ci <- rdd$ci/2
-models[["rdall"]] <- rdd
-
-for(i in sort(unique(openseats$decade))) {
-  
-  rdd <- rdrobust(y=openseats$con_demshare_tplus1[openseats$decade==i],
-                  x=openseats$demmv[openseats$decade==i], c=0, bwselect = "mserd")
-  rdd$coef <- rdd$coef/2 # divide effect by two
-  rdd$ci <- rdd$ci/2
-  
-  models[[paste0("rd", i)]] <- rdd
-  
-}
-
-modelsummary(models, 
-             output = "../results/RDDestimates.tex", 
-             coef_omit= "Intercept|factor|Conventional|Bias", stars=F,
-             gof_omit = "Std|BIC|AIC|Log|Adj|R2|F",
-             statistic = "conf.int",
-             add_rows = data.frame(matrix(c(
-               "Year FE", " ", "X", "X", " ", " ", " ", " ", " ", " "
-             ), ncol = 10, byrow=T)))
+#set.seed(123)
+#test <- elections[sample(rownames(elections), 10), ]
+#View(test)
 
 ###
 
+# vote share outcome, by decade
 
-elections <- read.csv("working/congress_demterm_hand_corrected_bin.csv", stringsAsFactors = F)
-elections$demmv <- (elections$con_demshare - elections$con_repshare) # running variable is margin of victory in percentage points of total vote share
+rd1 <- rdrobust(y = elections$incumb_running_tplus1, x=elections$demmv, bwselect = "msetwo") # first model - outcome is incumbent running in t+1
+leftintercept <- rd1$beta_p_l[1]
+rightintercept <- rd1$beta_p_r[1]
 
-dfloor <- function(x) {
-  return(((x-2) %/% 10) *10 + 2)
-}
-elections$decade <- dfloor(elections$con_raceyear)
+rd2 <- rdrobust(y=elections$con_demshare_tplus1, x=elections$demmv, bwselect = "msetwo") # second model - outcome is Dem vote share in t+1
+rd2$coef_adj <- rd2$coef / (leftintercept + rightintercept)
+rd2$ci_adj <- rd2$ci / (leftintercept + rightintercept)
 
-rdd <- rdrobust(y=openseats$con_demshare_tplus1, x=openseats$demmv, c=0, bwselect = "mserd")
+out <- list(`Full Sample` = rd2)
+stage1 <- matrix(ncol=7)
+stats <- c(round(leftintercept+rightintercept,3), round(rd2$coef_adj[1],3), paste0("[", round(rd2$ci_adj[1,1],3), ", ", round(rd2$ci_adj[1,2],3), "]"), 
+           round(rd2$beta_p_l[1],3), rd2$N_h[1], rd2$N_h[2], round(rd2$bws[1,1],3))
+stage1 <- rbind(stage1, stats)
 
-
-rdd <- rdrobust(y=elections$con_incumbency, x=elections$demmv, c=0, bwselect = "mserd")
-
-
-for(i in unique(elections$decade)) {
-  if(i==unique(elections$decade)[1]) {
-    out <- matrix(data=NA, nrow = length(unique(elections$dem_inc_bin)), ncol = length(unique(elections$decade)))
-    rownames(out) <- unique(elections$dem_inc_bin)
-    colnames(out) <- unique(elections$decade)
-  }
+for(j in 1:length(unique(elections$decade))) {
+  i <- sort(unique(elections$decade))[j]
+  electemp <- elections[which(elections$decade==i),]
   
-  for(j in unique(elections$dem_inc_bin)) {
-    
-    temp <- elections[which(elections$decade==i & elections$dem_inc_bin==j), ]
-    
-    rdd <- rdrobust(y=temp$con_incumbency, x=temp$demmv, c=0, bwselect = "mserd")
-    
-    out[as.character(j), as.character(i)] <- rdd$Estimate[[1]]
-    
+  rd1 <- rdrobust(y = electemp$incumb_running_tplus1, x=electemp$demmv, bwselect = "msetwo") # first model - outcome is incumbent running in t+1
+  leftintercept <- rd1$beta_p_l[1]
+  rightintercept <- rd1$beta_p_r[1]
+  
+  rd2 <- rdrobust(y=electemp$con_demshare_tplus1, x=electemp$demmv, bwselect = "msetwo") # second model - outcome is Dem vote share in t+1
+  rd2$coef_adj <- rd2$coef / (leftintercept + rightintercept)
+  rd2$ci_adj <- rd2$ci / (leftintercept + rightintercept)
+  
+  stats <- c(round(leftintercept+rightintercept,3), round(rd2$coef_adj[1],3), paste0("[", round(rd2$ci_adj[1,1],3), ", ", round(rd2$ci_adj[1,2],3), "]"), 
+             round(rd2$beta_p_l[1],3), round(rd2$N_h[1],3), round(rd2$N_h[2],3), round(rd2$bws[1,1],3))
+  stage1 <- rbind(stage1, stats)
+  
+  out[[as.character(i)]] <- rd2 # store the result
+  
+  if(j==length(unique(elections$decade))) {
+    modelsummary(out, output = sprintf("../results/RDestimates_decade_voteshare_%s.tex", Sys.Date()), coef_omit= "Intercept|factor|Conventional|Bias",
+                 stars=F, gof_omit = "Std|BIC|AIC|Log|Adj|R2|F|n", statistic = "conf.int", coef_rename = c("Robust"="Conventional"),
+                 add_rows = data.frame(cbind(c("Incumb. Factor Estimate", "Conventional (adj.)", " ",  "Intercept left of CO", "Eff. N left of cutoff", "Eff. N right of cutoff", "Bandwidth"),
+                                             matrix(stage1[-1,], nrow = ncol(stage1), byrow = T))))
   }
 }
+
+###
+
+# Probability of Dem. victory outcome, by decade
+
+elections$demwin_tplus1 <- (elections$demmv_tplus1>0)
+
+rd1 <- rdrobust(y = elections$incumb_running_tplus1, x=elections$demmv, bwselect = "msetwo") # first model - outcome is incumbent running in t+1
+leftintercept <- rd1$beta_p_l[1]
+rightintercept <- rd1$beta_p_r[1]
+
+rd2 <- rdrobust(y=elections$demwin_tplus1, x=elections$demmv, bwselect = "msetwo") # second model - outcome is Dem vote share in t+1
+rd2$coef_adj <- rd2$coef / (leftintercept + rightintercept)
+rd2$ci_adj <- rd2$ci / (leftintercept + rightintercept)
+
+out <- list(`Full Sample` = rd2)
+stage1 <- matrix(ncol=7)
+stats <- c(round(leftintercept+rightintercept,3), round(rd2$coef_adj[1],3), paste0("[", round(rd2$ci_adj[1,1],3), ", ", round(rd2$ci_adj[1,2],3), "]"), 
+           round(rd2$beta_p_l[1],3), rd2$N_h[1], rd2$N_h[2], round(rd2$bws[1,1],3))
+stage1 <- rbind(stage1, stats)
+
+for(j in 1:length(unique(elections$decade))) {
+  i <- sort(unique(elections$decade))[j]
+  electemp <- elections[which(elections$decade==i),]
+  
+  rd1 <- rdrobust(y = electemp$incumb_running_tplus1, x=electemp$demmv, bwselect = "msetwo") # first model - outcome is incumbent running in t+1
+  leftintercept <- rd1$beta_p_l[1]
+  rightintercept <- rd1$beta_p_r[1]
+  
+  rd2 <- rdrobust(y=electemp$demwin_tplus1, x=electemp$demmv, bwselect = "msetwo") # second model - outcome is Dem vote share in t+1
+  rd2$coef_adj <- rd2$coef / (leftintercept + rightintercept)
+  rd2$ci_adj <- rd2$ci / (leftintercept + rightintercept)
+  
+  stats <- c(round(leftintercept+rightintercept,3), round(rd2$coef_adj[1],3), paste0("[", round(rd2$ci_adj[1,1],3), ", ", round(rd2$ci_adj[1,2],3), "]"), 
+             round(rd2$beta_p_l[1],3), rd2$N_h[1], rd2$N_h[2], round(rd2$bws[1,1],3))
+  stage1 <- rbind(stage1, stats)
+  
+  out[[as.character(i)]] <- rd2 # store the result
+  
+  # if(j==length(unique(elections$decade))) {
+  #   modelsummary(out, output = sprintf("../results/RDestimates_decade_windummy_%s.tex", Sys.Date()), coef_omit= "Intercept|factor|Conventional|Bias", 
+  #                stars=F, gof_omit = "Std|BIC|AIC|Log|Adj|R2|F|n", statistic = "conf.int", coef_rename = c("Robust"="Conventional"),
+  #                add_rows = data.frame(cbind(c("Incumb. Factor Estimate", "Conventional (adj.)", " ",  "Intercept left of CO", "Eff. N left of cutoff", "Eff. N right of cutoff", "Bandwidth"),
+  #                                            matrix(stage1[-1,], nrow = ncol(stage1), byrow = T))))
+  # }
+}
+
+###
+
+# vote share outcome, by cumulative length of incumbency
+
+rd1 <- rdrobust(y = elections$incumb_running_tplus1, x=elections$demmv, bwselect = "msetwo") # first model - outcome is incumbent running in t+1
+leftintercept <- rd1$beta_p_l[1]
+rightintercept <- rd1$beta_p_r[1]
+
+rd2 <- rdrobust(y=elections$con_demshare_tplus1, x=elections$demmv, bwselect = "msetwo") # second model - outcome is Dem vote share in t+1
+rd2$coef_adj <- rd2$coef / (leftintercept + rightintercept)
+rd2$ci_adj <- rd2$ci / (leftintercept + rightintercept)
+
+out <- list(`Full Sample` = rd2)
+stage1 <- matrix(ncol=7)
+stats <- c(round(leftintercept+rightintercept,3), round(rd2$coef_adj[1],3), paste0("[", round(rd2$ci_adj[1,1],3), ", ", round(rd2$ci_adj[1,2],3), "]"), 
+           round(rd2$beta_p_l[1],3), rd2$N_h[1], rd2$N_h[2], round(rd2$bws[1,1],3))
+stage1 <- rbind(stage1, stats)
+
+elections$dem_inc_bin <- ifelse(elections$dem_inc_bin==0, 0, 1)
+bins <- unique(na.omit(elections$dem_inc_bin))
+
+for(j in 1:length(bins)) {
+  i <- sort(bins)[j]
+  electemp <- elections[which(elections$dem_inc_bin==i),]
+  
+  rd1 <- rdrobust(y = electemp$incumb_running_tplus1, x=electemp$demmv, bwselect = "msetwo") # first model - outcome is incumbent running in t+1
+  leftintercept <- rd1$beta_p_l[1]
+  rightintercept <- rd1$beta_p_r[1]
+  
+  rd2 <- rdrobust(y=electemp$con_demshare_tplus1, x=electemp$demmv, bwselect = "msetwo") # second model - outcome is Dem vote share in t+1
+  rd2$coef_adj <- rd2$coef / (leftintercept + rightintercept)
+  rd2$ci_adj <- rd2$ci / (leftintercept + rightintercept)
+  
+  stats <- c(round(leftintercept+rightintercept,3), round(rd2$coef_adj[1],3), paste0("[", round(rd2$ci_adj[1,1],3), ", ", round(rd2$ci_adj[1,2],3), "]"), 
+             round(rd2$beta_p_l[1],3), rd2$N_h[1], rd2$N_h[2], round(rd2$bws[1,1],3))
+  stage1 <- rbind(stage1, stats)
+  
+  #out[[c("Open", "1", "2-3", "4+")[j]]] <- rd2 # store the result
+  out[[c("Open", "1+")[j]]] <- rd2 # store the result
+  # if(j==length(bins)) {
+  #   modelsummary(out, output = sprintf("../results/RDestimates_incumblgth_voteshare_%s.tex", Sys.Date()), coef_omit= "Intercept|factor|Conventional|Bias", 
+  #                stars=F, gof_omit = "Std|BIC|AIC|Log|Adj|R2|F|n", statistic = "conf.int", coef_rename = c("Robust"="Conventional"),
+  #                add_rows = data.frame(cbind(c("Incumb. Factor Estimate", "Conventional (adj.)", " ",  "Intercept left of CO", "Eff. N left of cutoff", "Eff. N right of cutoff", "Bandwidth"),
+  #                                            matrix(stage1[-1,], nrow = ncol(stage1), byrow = T))))
+  # }
+}
+
+###
+
+# prob of victory outcome, by cumulative length of incumbency
+
+rd1 <- rdrobust(y = elections$incumb_running_tplus1, x=elections$demmv, bwselect = "msetwo") # first model - outcome is incumbent running in t+1
+leftintercept <- rd1$beta_p_l[1]
+rightintercept <- rd1$beta_p_r[1]
+
+rd2 <- rdrobust(y=elections$demwin_tplus1, x=elections$demmv, bwselect = "msetwo") # second model - outcome is Dem vote share in t+1
+rd2$coef_adj <- rd2$coef / (leftintercept + rightintercept)
+rd2$ci_adj <- rd2$ci / (leftintercept + rightintercept)
+
+out <- list(`Full Sample` = rd2)
+stage1 <- matrix(ncol=7)
+stats <- c(round(leftintercept+rightintercept,3), round(rd2$coef_adj[1],3), paste0("[", round(rd2$ci_adj[1,1],3), ", ", round(rd2$ci_adj[1,2],3), "]"), 
+           round(rd2$beta_p_l[1],3), rd2$N_h[1], rd2$N_h[2], round(rd2$bws[1,1],3))
+stage1 <- rbind(stage1, stats)
+
+bins <- unique(na.omit(elections$dem_inc_bin))
+for(j in 1:length(bins)) {
+  i <- sort(bins)[j]
+  electemp <- elections[which(elections$dem_inc_bin==i),]
+  
+  rd1 <- rdrobust(y = electemp$incumb_running_tplus1, x=electemp$demmv, bwselect = "msetwo") # first model - outcome is incumbent running in t+1
+  leftintercept <- rd1$beta_p_l[1]
+  rightintercept <- rd1$beta_p_r[1]
+  
+  rd2 <- rdrobust(y=electemp$demwin_tplus1, x=electemp$demmv, bwselect = "msetwo") # second model - outcome is Dem vote share in t+1
+  rd2$coef_adj <- rd2$coef / (leftintercept + rightintercept)
+  rd2$ci_adj <- rd2$ci / (leftintercept + rightintercept)
+  
+  stats <- c(round(leftintercept+rightintercept,3), round(rd2$coef_adj[1],3), paste0("[", round(rd2$ci_adj[1,1],3), ", ", round(rd2$ci_adj[1,2],3), "]"), 
+             round(rd2$beta_p_l[1],3), rd2$N_h[1], rd2$N_h[2], round(rd2$bws[1,1],3))
+  stage1 <- rbind(stage1, stats)
+  
+  #out[[c("Open", "1", "2-3", "4+")[j]]] <- rd2 # store the result
+  out[[c("Open", "1+")[j]]] <- rd2 # store the result
+  
+  # if(j==length(bins)) {
+  #   modelsummary(out, output = sprintf("../results/RDestimates_incumblgth_windummy_%s.tex", Sys.Date()), coef_omit= "Intercept|factor|Conventional|Bias", 
+  #                stars=F, gof_omit = "Std|BIC|AIC|Log|Adj|R2|F|n", statistic = "conf.int", coef_rename = c("Robust"="Conventional"),
+  #                add_rows = data.frame(cbind(c("Incumb. Factor Estimate", "Conventional (adj.)", " ",  "Intercept left of CO", "Eff. N left of cutoff", "Eff. N right of cutoff", "Bandwidth"),
+  #                                            matrix(stage1[-1,], nrow = ncol(stage1), byrow = T))))
+  # }
+}
+
+
+###########################################################################
+
+elections$highestshare_nonrep <- apply(elections[, c("con_demshare", "con_thirdshare")], 1, FUN=function(x) max(x, na.rm=T))
+elections$repmv <- elections$con_repshare - elections$highestshare_nonrep
+
+elections$incumb_voteshare <- NA
+elections$incumb_voteshare[which(elections$dem_inc_count_consecutive>0)] <- elections$demmv[which(elections$dem_inc_count_consecutive>0)]
+elections$incumb_voteshare[which(elections$con_repstatus=="Incumbent")] <- elections$repmv[which(elections$con_repstatus=="Incumbent")]
+
+elections$incumb_win <- (elections$incumb_voteshare>0) * elections$incumb_running
+
+reelection_rates <- tapply(elections$incumb_win[which(elections$incumb_running==1)], 
+                           INDEX = elections$con_raceyear[which(elections$incumb_running==1)], 
+                           FUN=function(x) mean(x, na.rm=T))
+reelection_rates <- data.frame(year=names(reelection_rates), rate = round(reelection_rates, digits = 2))
+
+elections$demwin <- elections$demmv>0
+
+demwin <- tapply(elections$demwin, INDEX=elections$con_raceyear, FUN=function(x) sum(x, na.rm=T))
+demwin <- data.frame(year=names(demwin), seats = demwin)
+demseats <- read.csv(file = "original/summary/demhouseseats.csv")
+demseats$Congress[demseats$Years=="1991-1992"] <- 102
+demseats$Seats[demseats$Congress==116 & demseats$Region=="Plains"] <- 21
+demseats$demseats <- demseats$Seats * (demseats$Percent/100)
+demseats <- aggregate(demseats$demseats, by=list(demseats$Congress), FUN=function(x)as.character(round(sum(x))))
+demseats$year <- 1786+2*demseats$Group.1
+
+demwin <- merge(demwin, demseats, by="year")
+demwin <- merge(demwin, reelection_rates, by="year")
+demwin <- demwin[, c("year", "seats", "x", "rate")]
+names(demwin) <- c("Year", "Dem. Seats (our data)", "Dem. Seats (valid)", "Incumb. Reelec Pct.")
+print.xtable(xtable(demwin, type="latex"), file="../results/demstats.tex", include.rownames = F)
+
+elections$openseat <- (elections$incumb_running==0)
+os <- tapply(elections$openseat, INDEX=elections$con_raceyear, FUN = function(x) sum(x, na.rm=T))
+os <- data.frame(year=names(os), seats = os)
+openseats <- data.frame(matrix(c(2000, 35,
+                                 2002, 45,
+                                 2004, 34,
+                                 2006, 32, 
+                                 2008, 37,
+                                 2010, 41,
+                                 2012, 73,
+                                 2014, 46,
+                                 2016, 47,
+                                 2018, 63,
+                                 2020, 48), ncol = 2, byrow=T))
+os <- merge(os, openseats, by.x = "year", by.y = "X1")
+os$X2 <- as.character(round(os$X2))
+names(os) <- c("year", "open seats (our data)", "open seats (wiki)")
+
+print.xtable(xtable(os, type="latex"), file="../results/openseats.tex", include.rownames = F)
+
+
+
+
+
 
 
 
