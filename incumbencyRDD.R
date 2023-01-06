@@ -92,12 +92,12 @@ for(j in 1:length(unique(elections$decade))) {
   
   out[[as.character(i)]] <- rd2 # store the result
   
-  if(j==length(unique(elections$decade))) {
-    modelsummary(out, output = sprintf("../results/RDestimates_decade_voteshare_%s.tex", Sys.Date()), coef_omit= "Intercept|factor|Conventional|Bias",
-                 stars=F, gof_omit = "Std|BIC|AIC|Log|Adj|R2|F|n", statistic = "conf.int", coef_rename = c("Robust"="Conventional"),
-                 add_rows = data.frame(cbind(c("Incumb. Factor Estimate", "Conventional (adj.)", " ",  "Intercept left of CO", "Eff. N left of cutoff", "Eff. N right of cutoff", "Bandwidth"),
-                                             matrix(stage1[-1,], nrow = ncol(stage1), byrow = T))))
-  }
+  # if(j==length(unique(elections$decade))) {
+  #   modelsummary(out, output = sprintf("../results/RDestimates_decade_voteshare_%s.tex", Sys.Date()), coef_omit= "Intercept|factor|Conventional|Bias",
+  #                stars=F, gof_omit = "Std|BIC|AIC|Log|Adj|R2|F|n", statistic = "conf.int", coef_rename = c("Robust"="Conventional"),
+  #                add_rows = data.frame(cbind(c("Incumb. Factor Estimate", "Conventional (adj.)", " ",  "Intercept left of CO", "Eff. N left of cutoff", "Eff. N right of cutoff", "Bandwidth"),
+  #                                            matrix(stage1[-1,], nrow = ncol(stage1), byrow = T))))
+  # }
 }
 
 ###
@@ -271,7 +271,7 @@ demwin <- merge(demwin, demseats, by="year")
 demwin <- merge(demwin, reelection_rates, by="year")
 demwin <- demwin[, c("year", "seats", "x", "rate")]
 names(demwin) <- c("Year", "Dem. Seats (our data)", "Dem. Seats (valid)", "Incumb. Reelec Pct.")
-print.xtable(xtable(demwin, type="latex"), file="../results/demstats.tex", include.rownames = F)
+#print.xtable(xtable(demwin, type="latex"), file="../results/demstats.tex", include.rownames = F)
 
 elections$openseat <- (elections$incumb_running==0)
 os <- tapply(elections$openseat, INDEX=elections$con_raceyear, FUN = function(x) sum(x, na.rm=T))
@@ -291,7 +291,7 @@ os <- merge(os, openseats, by.x = "year", by.y = "X1")
 os$X2 <- as.character(round(os$X2))
 names(os) <- c("year", "open seats (our data)", "open seats (wiki)")
 
-print.xtable(xtable(os, type="latex"), file="../results/openseats.tex", include.rownames = F)
+#print.xtable(xtable(os, type="latex"), file="../results/openseats.tex", include.rownames = F)
 
 
 
