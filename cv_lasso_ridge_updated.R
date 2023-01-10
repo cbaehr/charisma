@@ -56,16 +56,16 @@ for(i in interactions) {
 ##pct-based features
 
 set.seed(12345)
-Democrats <- na.omit(cbind(cd$con_demshare, D))
+Democrats <- na.omit(cbind(cd$con_demcandidate, cd$con_raceyear, cd$statenm, cd$cd,cd$con_demshare, D))
 y <- Democrats$`cd$con_demshare`
-X <- Democrats[,-1]
+X <- Democrats[,c(6:785)]
 
 # Spliting training set into two parts based on outcome: 75% (training) and 25% (testing)
 index <- createDataPartition(y, p=0.75, list=FALSE)
-X_train <- X[ index, ]
+X_train <- X[index, ]
 X_test <- X[-index, ]
 y_train <- y[index]
-y_test<-y[-index]
+y_test <- y[-index]
 
 
 #lambda <- 10^seq(-1, 0.6, length = 20)
@@ -79,7 +79,7 @@ lasso_caret <- train(
   X_train, y_train, 
   method = "glmnet",
   trControl = trainControl("cv", number = 5),
-  tuneGrid = expand.grid(alpha=0.4, lambda = parameters),
+  tuneGrid = expand.grid(alpha=1, lambda = parameters),
   preProcess = c("scale")
 )
 
@@ -99,9 +99,25 @@ linear <- train(
 )
 
 
+
+rf_caret <- train(
+  X_train, y_train,
+  method = "rf",
+  trControl = trainControl("cv", number = 5),
+  #ntree=10
+  #metric= "RMSE"
+  # importance = "permutation",
+  preProcess = c("scale")
+)
+
+rf_model_down$finalModel$ntree
+
+plot(rf_caret)
+
 ##Best Parameters
 print(paste0('Lasso best parameters: ' , lasso_caret$finalModel$lambdaOpt))
 print(paste0('Ridge best parameters: ' , ridge_caret$finalModel$lambdaOpt))
+
 
 
 
@@ -110,32 +126,42 @@ plot(lasso_caret, metric = "RMSE")
 plot(ridge_caret, metric = "RMSE")
 
 
+plot(varImp(ridge_caret, scale = FALSE), top = 10, main = "glmnet")
+
+# Make the predictions
+predictions_lasso <- lasso_caret %>% predict(X_test)
+predictions_ridge <- ridge_caret %>% predict(X)
+predictions_lin <- linear %>% predict(X_test)
+
+
+predictions_rf <- predict(rf_caret, X_test)
+RMSE <- sqrt(sum((predictions_rf - y_test)^2)/length(predictions_rf))
+print(RMSE)
+
+
 data.frame(
   Ridge_RMSE = RMSE(predictions_ridge, y_test) , 
   Lasso_RMSE = RMSE(predictions_lasso, y_test),
-  Linear_RMSE = RMSE(predictions_ridge, y_test)
+  Linear_RMSE = RMSE(predictions_lin, y_test)
 )
 
-data.frame(
+#print(xtable(rmseout, type = "latex"), file = "output.tex")
+
+output<- data.frame(
   lasso = as.data.frame.matrix(coef(lasso_caret$finalModel, lasso_caret$finalModel$lambdaOpt)),
   ridge = as.data.frame.matrix(coef(ridge_caret$finalModel, ridge_caret$finalModel$lambdaOpt))
 ) %>%  rename(lasso = s1, ridge = s1.1)
 
 
 
-# Make the predictions
-predictions_lasso <- lasso_caret %>% predict(X_test)
-predictions_ridge <- ridge_caret %>% predict(X)
-predictions_lin <- linear %>% predict(X_test)
 Democrats$PAR_D <- as.vector(predictions_ridge)
 
 Democrats$PARerror <- Democrats$`cd$con_demshare` - Democrats$PAR_D 
 Democrats <- Democrats[order(Democrats$PARerror, decreasing=T), ]
 
-
-
-trellis.par.set(caretTheme())
-plot(ridge_caret)  
+subset<- Democrats[, c("PARerror", "PAR_D","cd$con_demshare", "cd$con_demcandidate","cd$con_raceyear", "cd$statenm", "cd$cd")]
+subset <- subset[order(subset$PARerror, decreasing=T), ]
+print(xtable(subset[c(1:50),], type = "latex"),include.rownames=FALSE)
 
 
 
