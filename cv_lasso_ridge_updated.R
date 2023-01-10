@@ -1,6 +1,7 @@
 library(rdrobust)
 library(dplyr)
 library(modelsummary)
+library(randomForest)
 library(data.table)
 if(!require(pacman)){
   install.packages('pacman')
@@ -104,13 +105,20 @@ rf_caret <- train(
   X_train, y_train,
   method = "rf",
   trControl = trainControl("cv", number = 5),
-  #ntree=10
+  ntree=10
   #metric= "RMSE"
   # importance = "permutation",
-  preProcess = c("scale")
 )
 
-rf_model_down$finalModel$ntree
+#rf_caret_treeselection <- train(
+#  X_train, y_train,
+#  method = "rf",
+#  trControl = trainControl("cv", number = 5),
+  #metric= "RMSE"
+  # importance = "permutation",
+#)
+
+#rf_caret $finalModel$ntree
 
 plot(rf_caret)
 
@@ -119,21 +127,21 @@ print(paste0('Lasso best parameters: ' , lasso_caret$finalModel$lambdaOpt))
 print(paste0('Ridge best parameters: ' , ridge_caret$finalModel$lambdaOpt))
 
 
-
-
 trellis.par.set(caretTheme())
 plot(lasso_caret, metric = "RMSE")
 plot(ridge_caret, metric = "RMSE")
 
 
 plot(varImp(ridge_caret, scale = FALSE), top = 10, main = "glmnet")
+plot(varImp(rf_caret, scale = FALSE), top = 10, main = "rf")
 
 # Make the predictions
 predictions_lasso <- lasso_caret %>% predict(X_test)
 predictions_ridge <- ridge_caret %>% predict(X)
 predictions_lin <- linear %>% predict(X_test)
+predictions_rf <- rf_caret %>% predict(X)
 
-
+##calcualting rmse for random forest
 predictions_rf <- predict(rf_caret, X_test)
 RMSE <- sqrt(sum((predictions_rf - y_test)^2)/length(predictions_rf))
 print(RMSE)
@@ -154,7 +162,21 @@ output<- data.frame(
 
 
 
-Democrats$PAR_D <- as.vector(predictions_ridge)
+Democrats$PAR_D <- as.vector(predictions_rf)
+
+Democrats$PARerror <- Democrats$`cd$con_demshare` - Democrats$PAR_D 
+Democrats <- Democrats[order(Democrats$PARerror, decreasing=T), ]
+
+subset<- Democrats[, c("PARerror", "PAR_D","cd$con_demshare", "cd$con_demcandidate","cd$con_raceyear", "cd$statenm", "cd$cd")]
+subset <- subset[order(subset$PARerror, decreasing=T), ]
+
+
+
+
+
+
+##prediction by rf
+Democrats$PAR_D <- as.vector(predictions_rf)
 
 Democrats$PARerror <- Democrats$`cd$con_demshare` - Democrats$PAR_D 
 Democrats <- Democrats[order(Democrats$PARerror, decreasing=T), ]
@@ -163,5 +185,7 @@ subset<- Democrats[, c("PARerror", "PAR_D","cd$con_demshare", "cd$con_demcandida
 subset <- subset[order(subset$PARerror, decreasing=T), ]
 print(xtable(subset[c(1:50),], type = "latex"),include.rownames=FALSE)
 
+summary(Democrats$PARerror)
 
+print(xtable(subset[c(1:30),], type = "latex"),include.rownames=FALSE)
 
