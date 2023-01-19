@@ -3,7 +3,7 @@ setwd("/Users/christianbaehr/Dropbox/charisma_project/data/")
 
 #install.packages("readstata13", "glmnet")
 
-options(expressions = 5e6)
+#options(expressions = 5e6)
 
 library(lattice)
 library(glmnet)
@@ -11,12 +11,13 @@ library(dplyr)
 set.seed(683750)
 
 cd <- read.csv("working/cd_panel_full.csv")
+cd <- cd[which(cd$con_repstatus!="Incumbent" & cd$con_demstatus!="Incumbent"), ]
+#cd <- cd[which(!cd$con_repunopposed & !cd$con_demunopposed), ]
 
-cd <- cd[which(!cd$con_repunopposed & !cd$con_demunopposed), ]
+#sum(cd$con_repstatus!="Incumbent" & cd$con_demstatus!="Incumbent")
+
 cd <- cd[which(cd$con_demshare < 0.9 & cd$con_demshare > 0.1), ]
 hist(cd$con_demshare)
-
-#cd <- cd[which(cd$con_repstatus!="Incumbent" & cd$con_demstatus!="Incumbent"), ]
 
 ##creating a lag variable within each group (= congressional district)
 cd <- cd[order(cd$statenm, cd$cd, cd$con_raceyear), ]
