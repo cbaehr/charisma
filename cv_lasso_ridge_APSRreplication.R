@@ -1,6 +1,11 @@
 
 setwd("/Users/christianbaehr/Dropbox/charisma_project/data/")
 
+include.lag=F
+openseats.only=T
+drop.unopposed=F
+include.stateFE=T
+
 #install.packages("readstata13", "glmnet")
 
 #options(expressions = 5e6)
@@ -11,31 +16,43 @@ library(dplyr)
 set.seed(683750)
 
 cd <- read.csv("working/cd_panel_full.csv")
-cd <- cd[which(cd$con_repstatus!="Incumbent" & cd$con_demstatus!="Incumbent"), ]
-#cd <- cd[which(!cd$con_repunopposed & !cd$con_demunopposed), ]
-
-#sum(cd$con_repstatus!="Incumbent" & cd$con_demstatus!="Incumbent")
-
-cd <- cd[which(cd$con_demshare < 0.9 & cd$con_demshare > 0.1), ]
-hist(cd$con_demshare)
 
 ##creating a lag variable within each group (= congressional district)
 cd <- cd[order(cd$statenm, cd$cd, cd$con_raceyear), ]
 
-cd <- cd %>% 
-  group_by(statenm, cd) %>% 
+cd <- cd %>%
+  group_by(statenm, cd) %>%
   mutate(lag.con_demshare = dplyr::lag(con_demshare, n=1, default=NA))
 
-cdfull <- cd[complete.cases(cd), ] # drop rows with NA
+if(openseats.only) {
+  cd <- cd[which(cd$con_repstatus!="Incumbent" & cd$dem_inc_count_consecutive==0), ]
+} else {
+  cd <- cd
+}
+
+if(drop.unopposed) {
+  cd <- cd[which(!cd$con_repunopposed & !cd$con_demunopposed), ]
+} else {
+  cd <- cd
+}
+
+hist(cd$con_demshare)
 
 ## selecting features that should be squared (pct - Democrats)
-D <- cdfull[, c("lag.con_demshare","pres_demshare", "gov_demshare", "sen1_demshare", "sen2_demshare",
-                "pop_male_pct", "pop_over65_pct" , "pop_white_pct", "pop_black_pct"   , "pop_spanishorigin_pct" ,
-                "dem_inc_count_consecutive", "dem_inc_count_cumulative", "dem_inc_bin")]
 
-statedums <- data.frame(model.matrix(~ 0 + statenm, cdfull)[,-1]) # create state dummies and drop first
+features <- c("pres_demshare", "gov_demshare", "sen1_demshare", "sen2_demshare",
+              "pop_male_pct", "pop_over65_pct" , "pop_white_pct", "pop_black_pct"   , "pop_spanishorigin_pct" ,
+              "dem_inc_count_consecutive", "dem_inc_count_cumulative", "dem_inc_bin")
 
-D <- cbind(D, statedums) #join important covariates with state dummies
+if(include.lag) {
+  features <- c("lag.con_demshare", features)
+} else{
+  features <- features
+}
+
+cdfull <- cd[complete.cases(cd[, c("con_demshare", features)]), ] # drop rows with NA
+
+D <- cdfull[, features]
 
 D_names <- names(D)
 D_sq <- data.frame(apply(D[ , D_names], 2, function(x) x^2))
@@ -51,9 +68,16 @@ for(i in interactions) {
   D[, i] <- D[, nms[1]] * D[, nms[2]]
 }
 
+if(include.stateFE) {
+  statedums <- data.frame(model.matrix(~ 0 + statenm, cdfull)[,-1]) # create state dummies and drop first
+  D <- cbind(D, statedums) #join important covariates with state dummies
+} else {
+  D <- D
+}
 
 ## define outcome vector and covariate matrix
 data <- cbind(cdfull[c("con_demshare")], D)
+
 yname <- "con_demshare"
 
 y = data[,c(yname)]
@@ -78,6 +102,8 @@ terror.lasso = mean((pred - y[-train.indx])^2) # test error
 lmout = lm(as.formula(paste(yname, "~ .", sep="")), data=data[train.indx,])
 pred = predict(lmout, newdata=data[-train.indx,])
 terror.lm = mean((pred - y[-train.indx])^2)
+
+View(cbind(cdfull$con_demcandidate[-train.indx], cdfull$con_demshare[-train.indx], pred))
 
 cat("Lasso test error is ", terror.lasso, "\n")
 cat("Ridge test error is ", terror.ridge, "\n")
