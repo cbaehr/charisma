@@ -41,8 +41,7 @@ hist(cd$con_demshare)
 ## selecting features that should be squared (pct - Democrats)
 
 features <- c("pres_demshare", "gov_demshare", "sen1_demshare", "sen2_demshare",
-              "pop_male_pct", "pop_over65_pct" , "pop_white_pct", "pop_black_pct"   , "pop_spanishorigin_pct" ,
-              "dem_inc_count_consecutive", "dem_inc_count_cumulative", "dem_inc_bin")
+              "pop_male_pct", "pop_over65_pct" , "pop_white_pct", "pop_black_pct", "pop_spanishorigin_pct") #dont include incumbency variables now. Openseats only
 
 if(include.lag) {
   features <- c("lag.con_demshare", features)
@@ -99,15 +98,31 @@ pred = predict (cvout.lasso , s="lambda.min", newx=x[-train.indx,])
 terror.lasso = mean((pred - y[-train.indx])^2) # test error 
 
 # Simple lm
-lmout = lm(as.formula(paste(yname, "~ .", sep="")), data=data[train.indx,])
-pred = predict(lmout, newdata=data[-train.indx,])
-terror.lm = mean((pred - y[-train.indx])^2)
 
-View(cbind(cdfull$con_demcandidate[-train.indx], cdfull$con_demshare[-train.indx], pred))
+lm.data <- apply(data[, names(data)!="con_demshare"], 2, scale)
+lm.data <- cbind.data.frame(data["con_demshare"], lm.data)
+
+lm1 = lm(as.formula(paste(yname, "~ .", sep="")), data=lm.data[train.indx,])
+
+top7 <- sort(abs(lm1$coefficients), decreasing=T)[1:7]
+
+form_top7 <- paste(yname, "~", paste(names(top7), collapse="+"))
+form_top7 <- gsub("`", "", form_top7)
+
+lm2=lm(as.formula(form_top7), data=lm.data[train.indx,])
+
+pred = predict(lm2, newdata=lm.data[-train.indx,])
+terror.lm = mean((pred - y[-train.indx])^2)
 
 cat("Lasso test error is ", terror.lasso, "\n")
 cat("Ridge test error is ", terror.ridge, "\n")
 cat("Lm test error is ", terror.lm, "\n")
+
+errordat <- as.matrix(t(cbind(c("OLS", terror.lm), c("Lasso", terror.lasso), c("Ridge", terror.ridge))))
+
+pdf(file = sprintf("../results/voteshare_prediction/error_comp_%s.pdf", Sys.Date()), width = 8, height = 6)
+dotchart(as.numeric(errordat[,2]), labels = errordat[,1], xlab = "Validation Set MSE", main = "MSE Performance Comparison")
+dev.off()
 
 # Now fit the model in the entire data, first choosing between lasso and ridge
 minerr = min(c(terror.lasso, terror.ridge, terror.lm))
@@ -144,11 +159,11 @@ pred <- as.vector(pred)
 err <- as.vector(err)
 
 write.csv(cbind(data.frame(cdfull), pred, err, terror.lasso, terror.ridge,  terror.lm, fit, rows), 
-          file = paste("working/predicted-mv.csv", sep=""))
+          file = paste(sprintf("working/predicted-mv_%s.csv", Sys.Date()), sep=""))
 
 ###
 
-pdf(file = "../results/voteshare_prediction/lasso_MSE.pdf", width = 8, height = 6)
+pdf(file=sprintf("../results/voteshare_prediction/lasso_MSE_%s.pdf", Sys.Date()), width = 8, height = 6)
 plot(cvout.lasso)
 dev.off()
 
@@ -157,13 +172,13 @@ pred = predict (out, s =  cvout.lasso$lambda.min, newx=x, exact =TRUE, x=x, y=y,
 err  = y - pred    # when err>0, y>pred, and you outperformed the prediction
 coef = predict (out, s =  cvout.lasso$lambda.min, type ="coefficients")
 
-pdf(file = "../results/voteshare_prediction/lasso_coefs.pdf", width = 8, height = 6)
+pdf(file = sprintf("../results/voteshare_prediction/lasso_coefs_%s.pdf", Sys.Date()), width = 8, height = 6)
 dotplot(coef[abs(coef[,1])>1,], xlab = sprintf("Coefficients with abs. value >1 (%s total nonzero coefficients)", sum(coef[,1]>0)))
 dev.off()
 
 ###
 
-pdf(file = "../results/voteshare_prediction/ridge_MSE.pdf", width = 8, height = 6)
+pdf(file = sprintf("../results/voteshare_prediction/ridge_MSE_%s.pdf", Sys.Date()), width = 8, height = 6)
 plot(cvout.ridge)
 dev.off()
 
@@ -177,9 +192,9 @@ result <- result[, c("statenm", "con_raceyear", "con_demcandidate", "err", "con_
 
 library(xtable)
 
-print(xtable(result[1:50,], type="latex"), file="../results/voteshare_prediction/top50residuals.tex")
+print(xtable(result[1:50,], type="latex"), file=sprintf("../results/voteshare_prediction/top50residuals_%s.tex", Sys.Date()))
 
-pdf(file = "../results/voteshare_prediction/parError.pdf", width = 8, height = 6)
+pdf(file = sprintf("../results/voteshare_prediction/parError_%s.pdf", Sys.Date()), width = 8, height = 6)
 hist(result$err, main=" ", xlab = "Actual - Predicted")
 dev.off()
 
