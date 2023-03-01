@@ -140,7 +140,7 @@ pred.lasso <- as.vector(pred.lasso)
 error.ridge <- as.vector(error.ridge)
 error.lasso <- as.vector(error.lasso)
 
-write.csv(cbind(data.frame(cdfull), pred.lm, pred.ridge, pred.lasso, error.lm, error.ridge, error.lasso),
+write.csv(cbind(data.frame(cdfull[-train.indx, ]), pred.lm, pred.ridge, pred.lasso, error.lm, error.ridge, error.lasso),
           file = paste("../results/demvoteshare_estimation/demvoteshare_predictions.csv", sep=""),
           row.names = F)
 
@@ -155,9 +155,17 @@ dev.off()
 
 
 
+pred.ridge.insample = predict (cvout.ridge, s="lambda.min", newx=x[train.indx,]) #predict on test set
+pred.lasso.insample = predict (cvout.lasso, s="lambda.min", newx=x[train.indx,]) #predict on test set
+ridge.residuals <- pred.ridge.insample-y[train.indx]
+ridge.lasso <- pred.lasso.insample-y[train.indx]
 
-
-
+pdf(file="../results/demvoteshare_estimation/PARerror_histogram_insample.pdf", width = 10, height = 6)
+par(mfrow=c(1, 3))
+hist(lmout$residuals, breaks = 50, xlab = "OLS", main="")
+hist(ridge.residuals, breaks = 50, xlab = "Ridge", main="PAR Error Distribution") 
+hist(ridge.lasso, breaks = 50, xlab = "Lasso", main="")
+dev.off()
 
 
 
