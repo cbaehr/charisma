@@ -104,7 +104,7 @@ y = data[,c(yname)] # vector of y values
 x = data[, names(data)!="con_demshare"] # matrix of X values
 x = model.matrix(as.formula(paste(yname, "~ .", sep="")), data)[,-1] # drop intercept (included automatically in model)
 
-###
+##########
 
 ## create training set indices
 train.indx = sample(1:nrow(data), floor(2/3 * nrow(data)))
@@ -166,6 +166,55 @@ hist(lmout$residuals, breaks = 50, xlab = "OLS", main="")
 hist(ridge.residuals, breaks = 50, xlab = "Ridge", main="PAR Error Distribution") 
 hist(ridge.lasso, breaks = 50, xlab = "Lasso", main="")
 dev.off()
+
+##########
+
+## now train on pre-2016 and predict on 2016-20
+
+## create training set indices
+train.indx = which(cdfull$con_raceyear<2016)
+
+## Ridge
+cvout.ridge = cv.glmnet(x[train.indx,], y[train.indx], alpha=0) #fit
+pred.ridge = predict (cvout.ridge, s="lambda.min", newx=x[-train.indx,]) #predict on test set
+error.ridge = pred.ridge - y[-train.indx] #error
+terror.ridge = mean(error.ridge^2) #MSE
+r_sq.ridge <- 1- ( sum(error.ridge^2) / sum((y[-train.indx] - mean(y[-train.indx]))^2) )  #r squared
+
+## Lasso
+cvout.lasso = cv.glmnet(x[train.indx,], y[train.indx], alpha=1) #fit
+pred.lasso = predict (cvout.lasso , s="lambda.min", newx=x[-train.indx,]) #predict on test set
+error.lasso = pred.lasso - y[-train.indx] #error
+terror.lasso = mean(error.lasso^2) #MSE
+r_sq.lasso <- 1- ( sum(error.lasso^2) / sum((y[-train.indx] - mean(y[-train.indx]))^2) )  #r squared
+
+## OLS
+PAR.data <- data[, c("con_demshare", "pres_demshare", "gov_demshare", "sen1_demshare", "sen2_demshare")] #Bob Erikson approach (plus levels )
+#statedums <- data.frame(model.matrix(~ 0 + statenm, cdfull)[,-1]) # create state dummies and drop first (multicollinearity)
+yeardums <- data.frame(model.matrix(~ 0 + con_raceyear, cdfull)[,-1])
+PAR.data <- cbind(PAR.data, yeardums) #join important covariates with year dummies
+
+lmout = lm(as.formula(paste(yname, "~ .", sep="")), data=PAR.data[train.indx,]) #fit
+pred.lm = predict(lmout, newdata=PAR.data[-train.indx,]) #predict on test set
+error.lm = pred.lm - y[-train.indx] #error
+terror.lm = mean(error.lm^2) #MSE
+r_sq.lm <- 1- ( sum(error.lm^2) / sum((y[-train.indx] - mean(y[-train.indx]))^2) ) #r squared
+
+pred.ridge <- as.vector(pred.ridge)
+pred.lasso <- as.vector(pred.lasso)
+error.ridge <- as.vector(error.ridge)
+error.lasso <- as.vector(error.lasso)
+
+write.csv(cbind(data.frame(cdfull[-train.indx, ]), pred.lm, pred.ridge, pred.lasso, error.lm, error.ridge, error.lasso),
+          file = paste("../results/demvoteshare_estimation/demvoteshare_predictions_earlytraining_predict2016-2020.csv", sep=""),
+          row.names = F)
+
+
+
+
+
+
+
 
 
 
