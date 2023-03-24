@@ -46,10 +46,15 @@ if(drop.unopposed) {
 ###
 
 ## selecting features that should be squared (pct - Democrats)
+if(openseats.only) {
+  features <- c("pres_demshare", "gov_demshare", "sen1_demshare", "sen2_demshare",
+                "pop_male_pct", "pop_over65_pct" , "pop_white_pct", "pop_black_pct", "pop_spanishorigin_pct")
+} else {
+  features <- c("pres_demshare", "gov_demshare", "sen1_demshare", "sen2_demshare",
+                "pop_male_pct", "pop_over65_pct" , "pop_white_pct", "pop_black_pct", "pop_spanishorigin_pct",
+                "dem_inc_count_consecutive", "dem_inc_count_cumulative", "dem_inc_bin")
+}
 
-features <- c("pres_demshare", "gov_demshare", "sen1_demshare", "sen2_demshare",
-              "pop_male_pct", "pop_over65_pct" , "pop_white_pct", "pop_black_pct"   , "pop_spanishorigin_pct" ,
-              "dem_inc_count_consecutive", "dem_inc_count_cumulative", "dem_inc_bin")
 
 ## if lagged DV dummy is true, then add to feature vector
 if(include.lag) {
@@ -124,6 +129,7 @@ terror.lasso = mean(error.lasso^2) #MSE
 r_sq.lasso <- 1- ( sum(error.lasso^2) / sum((y[-train.indx] - mean(y[-train.indx]))^2) )  #r squared
 
 ## OLS
+
 PAR.data <- data[, c("con_demshare", "pres_demshare", "gov_demshare", "sen1_demshare", "sen2_demshare")] #Bob Erikson approach (plus levels )
 #statedums <- data.frame(model.matrix(~ 0 + statenm, cdfull)[,-1]) # create state dummies and drop first (multicollinearity)
 yeardums <- data.frame(model.matrix(~ 0 + con_raceyear, cdfull)[,-1])
@@ -140,9 +146,139 @@ pred.lasso <- as.vector(pred.lasso)
 error.ridge <- as.vector(error.ridge)
 error.lasso <- as.vector(error.lasso)
 
-write.csv(cbind(data.frame(cdfull[-train.indx, ]), pred.lm, pred.ridge, pred.lasso, error.lm, error.ridge, error.lasso),
+elecinfo <- names(cdfull) %in% c("statenm", "cd", "con_raceyear", "con_repcandidate", "con_demcandidate")
+
+write.csv(cbind(data.frame(cdfull[-train.indx, elecinfo]), pred.lm, pred.ridge, pred.lasso, error.lm, error.ridge, error.lasso, data.frame(cdfull[-train.indx, !elecinfo])),
           file = paste("../results/demvoteshare_estimation/demvoteshare_predictions.csv", sep=""),
           row.names = F)
+
+##########
+
+# train on 1990-2014, test on 2016-20
+
+rsq <- function(y, yhat) return(1 - sum((y-yhat)^2) / sum((y-mean(y))^2))
+
+train.indx <- which(cdfull$con_raceyear %in% seq(1990, 2014) )
+test.indx <- which(cdfull$con_raceyear > 2014 )
+
+reg <- lm(con_demshare ~ pres_demshare, data=PAR.data[train.indx, ])
+ydem_pred = cbind(1, PAR.data$pres_demshare[test.indx]) %*% reg$coefficients
+rsq1 <- rsq(PAR.data$con_demshare[test.indx], ydem_pred)
+e1 <- PAR.data$con_demshare[test.indx] - ydem_pred
+mse1 <- mean(e1^2)
+
+reg <- lm(con_demshare ~ pres_demshare + gov_demshare, data=PAR.data[train.indx, ])
+ydem_pred = cbind(1, as.matrix(PAR.data[test.indx, c("pres_demshare", "gov_demshare")])) %*% reg$coefficients
+rsq2 <- rsq(PAR.data$con_demshare[test.indx], ydem_pred)
+e2 <- PAR.data$con_demshare[test.indx] - ydem_pred
+mse2 <- mean((e2)^2)
+
+reg <- lm(con_demshare ~ pres_demshare + gov_demshare + sen1_demshare, data=PAR.data[train.indx, ])
+ydem_pred = cbind(1, as.matrix(PAR.data[test.indx, c("pres_demshare", "gov_demshare", "sen1_demshare")])) %*% reg$coefficients
+rsq3 <- rsq(PAR.data$con_demshare[test.indx], ydem_pred)
+e3 <- PAR.data$con_demshare[test.indx] - ydem_pred
+mse3 <- mean((e3)^2)
+
+reg <- lm(con_demshare ~ pres_demshare + gov_demshare + sen1_demshare + sen2_demshare, data=PAR.data[train.indx, ])
+ydem_pred = cbind(1, as.matrix(PAR.data[test.indx, c("pres_demshare", "gov_demshare", "sen1_demshare", "sen2_demshare")])) %*% reg$coefficients
+rsq4 <- rsq(PAR.data$con_demshare[test.indx], ydem_pred)
+e4 <- PAR.data$con_demshare[test.indx] - ydem_pred
+mse4 <- mean((e4)^2)
+
+pdf(file = "../results/demvoteshare_estimation/RSQ_demvoteshare_train1990_test2016on.pdf", width=10, height=6)
+dotchart(x = c(rsq1, rsq2, rsq3, rsq4),
+         labels = c("Pres", "Pres/Gov", "Pres/Gov/Sen1", "Pres/Gov/Sen1/Sen2"),
+         xlab = "R^2 for Dem. vote share in test set", ylab = "Independent Variables",
+         main = "R^2, Train on 1990-2014, Test 2016-20")
+dev.off()
+
+pdf(file = "../results/demvoteshare_estimation/MSE_demvoteshare_train1990_test2016on.pdf", width=10, height=6)
+dotchart(x = c(mse1, mse2, mse3, mse4),
+         labels = c("Pres", "Pres/Gov", "Pres/Gov/Sen1", "Pres/Gov/Sen1/Sen2"),
+         xlab = "MSE for Dem. vote share in test set", ylab = "Independent Variables",
+         main = "MSE, train on 1990-2014, test 2016-20")
+dev.off()
+
+pdf(file = "../results/demvoteshare_estimation/errordist_demvoteshare_train1990_test2016on.pdf", width=10, height=6)
+par(mfrow=c(2, 2))
+hist(e1, breaks = 20, xlim = c(-0.6, 0.6), main = " ", ylab = " ", xlab = "Pres")
+hist(e2, breaks = 20, xlim = c(-0.6, 0.6), main = " ", ylab = " ", xlab = "Pres/Gov")
+hist(e3, breaks = 20, xlim = c(-0.6, 0.6), main = " ", ylab = " ", xlab = "Pres/Gov/Sen1")
+hist(e4, breaks = 20, xlim = c(-0.6, 0.6), main = " ", ylab = " ", xlab = "Pres/Gov/Sen1/Sen2")
+mtext("Test set error dist. of Dem. vote share, train on 1990-2014, test 2016-20", side=3, outer=TRUE, line=-3)
+dev.off()
+
+###
+
+# train on 2/3 data 1972-2020, test on 1/3
+
+train.indx <- sample(c(1:nrow(cdfull)), floor(2/3 * nrow(cdfull)))
+test.indx <- which(!rownames(cdfull) %in% train.indx)
+
+reg <- lm(con_demshare ~ pres_demshare, data=PAR.data[train.indx, ])
+ydem_pred = cbind(1, PAR.data$pres_demshare[test.indx]) %*% reg$coefficients
+rsq1 <- rsq(PAR.data$con_demshare[test.indx], ydem_pred)
+e1 <- PAR.data$con_demshare[test.indx] - ydem_pred
+mse1 <- mean((e1)^2)
+
+reg <- lm(con_demshare ~ pres_demshare + gov_demshare, data=PAR.data[train.indx, ])
+ydem_pred = cbind(1, as.matrix(PAR.data[test.indx, c("pres_demshare", "gov_demshare")])) %*% reg$coefficients
+rsq2 <- rsq(PAR.data$con_demshare[test.indx], ydem_pred)
+e2 <- PAR.data$con_demshare[test.indx] - ydem_pred
+mse2 <- mean((e2)^2)
+
+reg <- lm(con_demshare ~ pres_demshare + gov_demshare + sen1_demshare, data=PAR.data[train.indx, ])
+ydem_pred = cbind(1, as.matrix(PAR.data[test.indx, c("pres_demshare", "gov_demshare", "sen1_demshare")])) %*% reg$coefficients
+rsq3 <- rsq(PAR.data$con_demshare[test.indx], ydem_pred)
+e3 <- PAR.data$con_demshare[test.indx] - ydem_pred
+mse3 <- mean((e3)^2)
+
+reg <- lm(con_demshare ~ pres_demshare + gov_demshare + sen1_demshare + sen2_demshare, data=PAR.data[train.indx, ])
+ydem_pred = cbind(1, as.matrix(PAR.data[test.indx, c("pres_demshare", "gov_demshare", "sen1_demshare", "sen2_demshare")])) %*% reg$coefficients
+rsq4 <- rsq(PAR.data$con_demshare[test.indx], ydem_pred)
+e4 <- PAR.data$con_demshare[test.indx] - ydem_pred
+mse4 <- mean((e4)^2)
+
+vars <- c("pres_demshare", "gov_demshare", "sen1_demshare", "sen2_demshare", paste0("con_raceyear", seq(1976,2020,2))) #omit 1974
+reg <- lm(paste0("con_demshare~", paste0(vars, collapse="+")), data=PAR.data[train.indx, ])
+ydem_pred = cbind(1, as.matrix(PAR.data[test.indx, vars])) %*% reg$coefficients
+rsq5 <- rsq(PAR.data$con_demshare[test.indx], ydem_pred)
+e5 <- PAR.data$con_demshare[test.indx] - ydem_pred
+mse5 <- mean((e5)^2)
+
+vars <- c("pres_demshare", paste0("con_raceyear", seq(1976,2020,2))) #omit 1974
+reg <- lm(paste0("con_demshare~", paste0(vars, collapse="+")), data=PAR.data[train.indx, ])
+ydem_pred = cbind(1, as.matrix(PAR.data[test.indx, vars])) %*% reg$coefficients
+rsq6 <- rsq(PAR.data$con_demshare[test.indx], ydem_pred)
+e6 <- PAR.data$con_demshare[test.indx] - ydem_pred
+mse6 <- mean((e6)^2)
+
+pdf(file = "../results/demvoteshare_estimation/RSQ_demvoteshare_traintwothirds.pdf", width=10, height=6)
+dotchart(x = c(rsq1, rsq2, rsq3, rsq4, rsq5, rsq6),
+         labels = c("Pres", "Pres/Gov", "Pres/Gov/Sen1", "Pres/Gov/Sen1/Sen2", "Pres/Gov/Sen1/Sen2/Year FE", "Just Pres + Year FE"),
+         xlab = "R^2 for Dem. vote share in test set", ylab = "Independent Variables",
+         main = "R^2, train on 2/3 of all data, test 1/3")
+dev.off()
+
+pdf(file = "../results/demvoteshare_estimation/MSE_demvoteshare_traintwothirds.pdf", width=10, height=6)
+dotchart(x = c(mse1, mse2, mse3, mse4, mse5, mse6),
+         labels = c("Pres", "Pres/Gov", "Pres/Gov/Sen1", "Pres/Gov/Sen1/Sen2", "Pres/Gov/Sen1/Sen2/Year FE", "Just Pres + Year FE"),
+         xlab = "MSE for Dem. vote share in test set", ylab = "Independent Variables",
+         main = "MSE, train on 2/3 of all data, test 1/3")
+dev.off()
+
+pdf(file = "../results/demvoteshare_estimation/errordist_demvoteshare_traintwothirds.pdf", width=8, height=8)
+par(mfrow=c(3, 2))
+hist(e1, breaks = 20, xlim = c(-0.6, 0.6), main = " ", ylab = " ", xlab = "Pres")
+hist(e2, breaks = 20, xlim = c(-0.6, 0.6), main = " ", ylab = " ", xlab = "Pres/Gov")
+hist(e3, breaks = 20, xlim = c(-0.6, 0.6), main = " ", ylab = " ", xlab = "Pres/Gov/Sen1")
+hist(e4, breaks = 20, xlim = c(-0.6, 0.6), main = " ", ylab = " ", xlab = "Pres/Gov/Sen1/Sen2")
+hist(e5, breaks = 20, xlim = c(-0.6, 0.6), main = " ", ylab = " ", xlab = "Pres/Gov/Sen1/Sen2/Year FE")
+hist(e6, breaks = 20, xlim = c(-0.6, 0.6), main = " ", ylab = " ", xlab = "Just Pres + Year FE")
+mtext("Test set error dist. of Dem. vote share, train on 2/3 of all data, test 1/3", side=3, outer=TRUE, line=-3)
+dev.off()
+
+##########
 
 ###
 
@@ -205,11 +341,30 @@ pred.lasso <- as.vector(pred.lasso)
 error.ridge <- as.vector(error.ridge)
 error.lasso <- as.vector(error.lasso)
 
-write.csv(cbind(data.frame(cdfull[-train.indx, ]), pred.lm, pred.ridge, pred.lasso, error.lm, error.ridge, error.lasso),
+write.csv(cbind(data.frame(cdfull[-train.indx, elecinfo]), pred.lm, pred.ridge, pred.lasso, error.lm, error.ridge, error.lasso, data.frame(cdfull[-train.indx, !elecinfo])),
           file = paste("../results/demvoteshare_estimation/demvoteshare_predictions_earlytraining_predict2016-2020.csv", sep=""),
           row.names = F)
 
+pdf(file="../results/demvoteshare_estimation/PARerror_histogram_earlytraining_predict2016-2020.pdf", width = 10, height = 6)
+par(mfrow=c(1, 3))
+hist(error.lm, breaks = 50, xlab = "OLS", main="")
+hist(error.ridge, breaks = 50, xlab = "Ridge", main="PAR Error Distribution") 
+hist(error.lasso, breaks = 50, xlab = "Lasso", main="")
+dev.off()
 
+
+
+pred.ridge.insample = predict (cvout.ridge, s="lambda.min", newx=x[train.indx,]) #predict on test set
+pred.lasso.insample = predict (cvout.lasso, s="lambda.min", newx=x[train.indx,]) #predict on test set
+ridge.residuals <- pred.ridge.insample-y[train.indx]
+ridge.lasso <- pred.lasso.insample-y[train.indx]
+
+pdf(file="../results/demvoteshare_estimation/PARerror_histogram_insample_earlytraining_predict2016-2020.pdf", width = 10, height = 6)
+par(mfrow=c(1, 3))
+hist(lmout$residuals, breaks = 50, xlab = "OLS", main="")
+hist(ridge.residuals, breaks = 50, xlab = "Ridge", main="PAR Error Distribution") 
+hist(ridge.lasso, breaks = 50, xlab = "Lasso", main="")
+dev.off()
 
 
 
