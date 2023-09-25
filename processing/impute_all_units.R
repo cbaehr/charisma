@@ -1,4 +1,105 @@
 
+
+## Dealing with missing county observations from the 1952-82 district-county mapping.
+## I use the GIS shapefiles for congressional districts and counties over time to
+## fill in these gaps in the county observations. I don't replace any cases that
+## are non-missing. 
+
+setwd("/Users/christianbaehr/Dropbox/charisma_project/data/")
+
+library(sf)
+library(haven)
+
+sf_use_s2(F)
+
+# for the 999 cases, can use the GIS files to identify the congressional district each county lies in. Do a spatial intersection and then keep whichever
+# observation the vast majority of the county lies in
+
+# at large elections coded as 98 or 99, dont worry about those for now. This is about congressional districts
+
+# for the 902s, select the two cases with the most proportion of the district within them. Checked Camden NJ and Hartford CT 1986 and the GIS files identify the districts
+
+# create a list for congressional district shapefiles by year. We will call the relevant year shapefile in to the loop
+# when necessary
+
+yrs <- seq(1952, 2012, 10)
+
+cong <- list()
+for(i in yrs) {
+  temp <- st_read(paste0("original/GIS/condistrict_boundaries/", i), stringsAsFactors = F)
+  temp <- temp[which(temp$DISTRICT != 0), ] # drop districts with district number 0
+  cong[[as.character(i)]] <- st_transform(temp, crs=4326) # transform shapefile CRS to 4326
+  
+}
+
+# load county shapefile
+county <- st_read("original/GIS/US_AtlasHCB_Counties_Gen0001/US_HistCounties_Gen0001_Shapefile/US_HistCounties_Gen0001.shp", stringsAsFactors=F)
+# create area variable in squared km
+county$county_area <- as.numeric(st_area(county$geometry)) / 1000000
+
+county$NAME[which(county$NAME=="Baltimore City (IC)")] <- "BALTIMORE CITY"
+county$NAME[which(county$NAME=="DEKALB")] <- "DE KALB"
+county$NAME[which(county$NAME=="DESOTO")] <- "DE SOTO"
+county$NAME[which(county$NAME=="Lynchburg (IC)")] <- "LYNCHBURG"
+county$NAME[which(county$NAME=="Virginia Beach (IC)")] <- "VIRGINIA BEACH"
+county$NAME[which(county$NAME=="MANASSAS PARK (IC)")] <- "MANASSAS"
+county$NAME[which(county$NAME=="DOÑA ANA")] <- "DONA ANA"
+
+# drop periods from county names to match up with census naming
+county$NAME <- gsub("\\.", "", county$NAME)
+county$NAME <- toupper(county$NAME) # all county names to uppercase
+
+# running variable
+out <- 1
+
+################################################################################
+
+# this is an important parameter. It defines the threshold under which a unit will be dropped.
+# if the ratio of unit area/district area and unit/county area is less than this, the unit
+# will be dropped because we assume it is a result of spatial data error (spilling over).
+sensitivity <- 0.001 
+
+for(i in yrs) {
+  con <- cong[[as.character(i)]]
+  con <- con[, c("STATENAME", "ID", "DISTRICT", "STARTCONG", "ENDCONG")]
+  con$cd_area <- st_area(con$geometry)
+  yearlong <- as.numeric(paste0(i, "0101"))
+  if(yearlong<20001231) {
+    cty <- county[which(county$START_N<=yearlong & county$END_N>=yearlong ), ]
+  } else {
+    cty <- county[which(county$START_N<=yearlong & county$END_N== 20001231), ]
+  }
+  
+  cty <- cty[, c("ID_NUM", "NAME", "STATE_TERR", "FIPS", "START_N", "END_N")]
+  cty$cty_area <- st_area(cty$geometry)
+
+  int <- st_intersection(con, cty)
+  int$unit_area <- st_area(int$geometry)
+  int$cd_prop <- as.numeric(int$unit_area / int$cd_area)
+  int$cty_prop <- as.numeric(int$unit_area / int$cty_area)
+  drop <- (int$cd_prop < sensitivity) & (int$cty_prop < sensitivity)
+  int <- int[which(int$STATENAME == int$STATE_TERR), ] # drop if county and cd state disagree
+  test <- int[drop, ]
+  int <- int[!drop, ]
+  
+  int$year <- i
+  if(i==yrs[1]) {
+    out <- int
+  } else {
+    out <- rbind(out, int)
+  }
+}
+
+out.df <- st_drop_geometry(out)
+write.csv(out.df, "/Users/christianbaehr/Desktop/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_FULLYGEO.csv", row.names = F)
+
+#################################################################################
+
+rm(list = setdiff(ls(), "out.df"))
+
+out.df <- read.csv("/Users/christianbaehr/Desktop/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_FULLYGEO.csv",
+                   stringsAsFactors = F)
+
 setwd("/Users/christianbaehr/Dropbox/charisma_project/data/")
 
 library(readxl)
@@ -6,18 +107,39 @@ library(stringi)
 
 ###
 
-county <- read.csv("working/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv", stringsAsFactors = F)
+#county <- read.csv("working/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added.csv", stringsAsFactors = F)
+
+out.df$state <- ifelse(nchar(out.df$FIPS)==4, substr(out.df$FIPS, 1, 1), substr(out.df$FIPS, 1, 2))
+
+names(out.df)
+#names(county)
+#county$cd <- as.numeric(county$cd)
+#county$fips <- as.numeric(county$fips)
+out.df <- out.df[, c("NAME", "STATENAME", "DISTRICT", "year", "state", "FIPS", "cty_prop")]
+#names(out.df) <- paste0(c("countynm", "statenm", "cd", "year", "state", "fips", "unit_weight"), "_GEO")
+names(out.df) <- c("countynm", "statenm", "cd", "year", "state", "fips", "unit_weight")
+#out.df$cd_GEO <- as.numeric(out.df$cd_GEO)
+county <- out.df
+#county$mergevar <- paste(county$cd, county$statenm, county$year, county$cd)
+#out.df$mergevar <- paste(out.df$cd_GEO, out.df$statenm_GEO, out.df$year_GEO, out.df$cd_GEO)
+#test <- merge(county, out.df, by.x = c("statenm", "year", "cd", "fips"), by.y = c("statenm_GEO", "year_GEO", "cd_GEO", "fips_GEO"))
+#test <- merge(county, out.df, by="mergevar")
+county$decade <- county$year-2
+
+#pop <- read.csv("working/population_data_countylevel.csv", stringsAsFactors = F)
+#county <- county[which(county$decade %in% pop$decade), ]
+#county <- merge(county, pop, by.x = c("fips", "decade"), by.y = c("fips", "decade")) # lose ~3000 obs
 
 # dont understand why there are a few CDs coded as "ZZ" in the ICPSR 13 data for 1992-2012. But
 # I checked and in each instance, the county coded with CD=="ZZ" had entries for other CDs as 
 # well. And the "unit weight" for the other entries always summed up to 1. So these "ZZ" 
 # entries are completely redundant
-county <- county[which(county$cd!="ZZ"), ]
+#county <- county[which(county$cd!="ZZ"), ]
 
 county$cd <- as.numeric(county$cd)
 
-county <- county[, c("countynm", "statenm", "cd", "year", "fips", "unit_pop",
-                     "countypop", "unit_weight")]
+# county <- county[, c("countynm", "statenm", "cd", "year", "fips", "unit_pop",
+#                      "countypop", "unit_weight")]
 
 county <- county[which(county$year >= 1972), ]
 
@@ -28,32 +150,32 @@ county <- county[which(county$year >= 1972), ]
 ###
 
 # only one CD in ND after 1972
-county$cd[which(county$year>=1972 & county$statenm=="North Dakota")] <- 1
-county$unit_weight[which(county$year>=1972 & county$statenm=="North Dakota")] <- 1
-
-# only one CD in DE
-county$cd[which(county$statenm=="Delaware")] <- 1
-county$unit_weight[which(county$statenm=="Delaware")] <- 1
-
-# only one CD in WY
-county$cd[which(county$statenm=="Wyoming")] <- 1
-county$unit_weight[which(county$statenm=="Wyoming")] <- 1
-
-# only one CD in VT
-county$cd[which(county$statenm=="Vermont")] <- 1
-county$unit_weight[which(county$statenm=="Vermont")] <- 1
-
-# only one CD in SD after 1982
-county$cd[which(county$year>=1982 & county$statenm=="South Dakota")] <- 1
-county$unit_weight[which(county$year>=1982 & county$statenm=="South Dakota")] <- 1
-
-# only one CD in MT after 1982
-county$cd[which(county$year>=1982 & county$statenm=="Montana")] <- 1
-county$unit_weight[which(county$year>=1982 & county$statenm=="Montana")] <- 1
-
-# only one CD in NV prior 1982
-county$cd[which(county$year<1982 & county$statenm=="Nevada")] <- 1
-county$unit_weight[which(county$year<1982 & county$statenm=="Nevada")] <- 1
+# county$cd[which(county$year>=1972 & county$statenm=="North Dakota")] <- 1
+# county$unit_weight[which(county$year>=1972 & county$statenm=="North Dakota")] <- 1
+# 
+# # only one CD in DE
+# county$cd[which(county$statenm=="Delaware")] <- 1
+# county$unit_weight[which(county$statenm=="Delaware")] <- 1
+# 
+# # only one CD in WY
+# county$cd[which(county$statenm=="Wyoming")] <- 1
+# county$unit_weight[which(county$statenm=="Wyoming")] <- 1
+# 
+# # only one CD in VT
+# county$cd[which(county$statenm=="Vermont")] <- 1
+# county$unit_weight[which(county$statenm=="Vermont")] <- 1
+# 
+# # only one CD in SD after 1982
+# county$cd[which(county$year>=1982 & county$statenm=="South Dakota")] <- 1
+# county$unit_weight[which(county$year>=1982 & county$statenm=="South Dakota")] <- 1
+# 
+# # only one CD in MT after 1982
+# county$cd[which(county$year>=1982 & county$statenm=="Montana")] <- 1
+# county$unit_weight[which(county$year>=1982 & county$statenm=="Montana")] <- 1
+# 
+# # only one CD in NV prior 1982
+# county$cd[which(county$year<1982 & county$statenm=="Nevada")] <- 1
+# county$unit_weight[which(county$year<1982 & county$statenm=="Nevada")] <- 1
 
 # drop the remaining at-large cases with no unit weight. These won't be factored into the final data anyway.
 # There are only 10 cases and the only ones that involve urban areas are three counties near Norfolk VA.
@@ -70,42 +192,42 @@ county$countynm <- gsub("\\.", "", county$countynm)
 county$decade <- county$year
 
 # tweaking county names to match with names from the congress voting data
-county$countynm[which(county$statenm=="alabama" & county$countynm=="calhoun/benton")] <- "calhoun"
-county$countynm[which(county$statenm=="alabama" & county$countynm=="chilton/baker")] <- "chilton"
-county$countynm[which(county$statenm=="alabama" & county$countynm=="de kalb")] <- "dekalb"
-county$countynm[which(county$statenm=="alabama" & county$countynm=="morgan/cotaco")] <- "morgan"
-county$countynm[which(county$statenm=="florida" & county$countynm=="bradford/new rive")] <- "bradford"
-county$countynm[which(county$statenm=="florida" & county$countynm=="dade")] <- "miami-dade"
-county$countynm[which(county$statenm=="florida" & county$countynm=="de soto")] <- "desoto"
-county$countynm[which(county$statenm=="florida" & county$countynm=="hernando/benton")] <- "hernando"
-county$countynm[which(county$statenm=="georgia" & county$countynm=="bartow/cass")] <- "bartow"
-county$countynm[which(county$statenm=="georgia" & county$countynm=="de kalb")] <- "dekalb"
-county$countynm[which(county$statenm=="illinois" & county$countynm=="de kalb")] <- "dekalb"
-county$countynm[which(county$statenm=="indiana" & county$countynm=="de kalb")] <- "dekalb"
-county$countynm[which(county$statenm=="iowa" & county$countynm=="lyon/buncombe")] <- "lyon"
-county$countynm[which(county$statenm=="iowa" & county$countynm=="o brien")] <- "o'brien"
-county$countynm[which(county$statenm=="iowa" & county$countynm=="obrien")] <- "o'brien"
-county$countynm[which(county$statenm=="kansas" & county$countynm=="neosho/dorn")] <- "neosho"
-county$countynm[which(county$statenm=="kentucky" & county$countynm=="mcclean")] <- "mclean"
-county$countynm[which(county$statenm=="louisiana" & county$countynm=="st john the bapti")] <- "st john the baptist"
-county$countynm[which(county$statenm=="louisiana" & county$countynm=="vermillion")] <- "vermilion"
-county$countynm[which(county$statenm=="michigan" & county$countynm=="mackinac/michilim")] <- "mackinac"
-county$countynm[which(county$statenm=="missouri" & county$countynm=="de kalb")] <- "dekalb"
-county$countynm[which(county$statenm=="nevada" & county$countynm=="carson")] <- "carson city"
-county$countynm[which(county$statenm=="tennessee" & county$countynm=="de kalb")] <- "dekalb"
-county$countynm[which(county$statenm=="texas" & county$countynm=="cass/davis")] <- "cass"
-county$countynm[which(county$statenm=="texas" & county$countynm=="stephens/buchanan")] <- "stephens"
-county$countynm[which(county$statenm=="virginia" & county$countynm=="alexandria city")] <- "alexandria"
-county$countynm[which(county$statenm=="virginia" & county$countynm=="arlington/alexand")] <- "arlington"
-county$countynm[which(county$statenm=="virginia" & county$countynm=="norfolk city")] <- "norfolk"
-county$countynm[which(county$statenm=="washington" & county$countynm=="grays harbor/cheh")] <- "grays harbor"
-county$countynm[which(county$statenm=="wisconsin" & county$countynm=="bayfield/la point")] <- "bayfield"
-
-county$fips[which(county$countynm=="miami-dade")] <- 12086
-county$fips[which(county$countynm=="dekalb" & county$statenm=="georgia")] <- 13089
-county$fips[which(county$countynm=="st clair" & county$statenm=="illinois")] <- 17163
-county$fips[which(county$countynm=="mackinac" & county$statenm=="michigan")] <- 26097
-county$fips[which(county$countynm=="st louis city" & county$decade<1992)] <- 29510
+# county$countynm[which(county$statenm=="alabama" & county$countynm=="calhoun/benton")] <- "calhoun"
+# county$countynm[which(county$statenm=="alabama" & county$countynm=="chilton/baker")] <- "chilton"
+# county$countynm[which(county$statenm=="alabama" & county$countynm=="de kalb")] <- "dekalb"
+# county$countynm[which(county$statenm=="alabama" & county$countynm=="morgan/cotaco")] <- "morgan"
+# county$countynm[which(county$statenm=="florida" & county$countynm=="bradford/new rive")] <- "bradford"
+# county$countynm[which(county$statenm=="florida" & county$countynm=="dade")] <- "miami-dade"
+# county$countynm[which(county$statenm=="florida" & county$countynm=="de soto")] <- "desoto"
+# county$countynm[which(county$statenm=="florida" & county$countynm=="hernando/benton")] <- "hernando"
+# county$countynm[which(county$statenm=="georgia" & county$countynm=="bartow/cass")] <- "bartow"
+# county$countynm[which(county$statenm=="georgia" & county$countynm=="de kalb")] <- "dekalb"
+# county$countynm[which(county$statenm=="illinois" & county$countynm=="de kalb")] <- "dekalb"
+# county$countynm[which(county$statenm=="indiana" & county$countynm=="de kalb")] <- "dekalb"
+# county$countynm[which(county$statenm=="iowa" & county$countynm=="lyon/buncombe")] <- "lyon"
+# county$countynm[which(county$statenm=="iowa" & county$countynm=="o brien")] <- "o'brien"
+# county$countynm[which(county$statenm=="iowa" & county$countynm=="obrien")] <- "o'brien"
+# county$countynm[which(county$statenm=="kansas" & county$countynm=="neosho/dorn")] <- "neosho"
+# county$countynm[which(county$statenm=="kentucky" & county$countynm=="mcclean")] <- "mclean"
+# county$countynm[which(county$statenm=="louisiana" & county$countynm=="st john the bapti")] <- "st john the baptist"
+# county$countynm[which(county$statenm=="louisiana" & county$countynm=="vermillion")] <- "vermilion"
+# county$countynm[which(county$statenm=="michigan" & county$countynm=="mackinac/michilim")] <- "mackinac"
+# county$countynm[which(county$statenm=="missouri" & county$countynm=="de kalb")] <- "dekalb"
+# county$countynm[which(county$statenm=="nevada" & county$countynm=="carson")] <- "carson city"
+# county$countynm[which(county$statenm=="tennessee" & county$countynm=="de kalb")] <- "dekalb"
+# county$countynm[which(county$statenm=="texas" & county$countynm=="cass/davis")] <- "cass"
+# county$countynm[which(county$statenm=="texas" & county$countynm=="stephens/buchanan")] <- "stephens"
+# county$countynm[which(county$statenm=="virginia" & county$countynm=="alexandria city")] <- "alexandria"
+# county$countynm[which(county$statenm=="virginia" & county$countynm=="arlington/alexand")] <- "arlington"
+# county$countynm[which(county$statenm=="virginia" & county$countynm=="norfolk city")] <- "norfolk"
+# county$countynm[which(county$statenm=="washington" & county$countynm=="grays harbor/cheh")] <- "grays harbor"
+# county$countynm[which(county$statenm=="wisconsin" & county$countynm=="bayfield/la point")] <- "bayfield"
+# 
+# county$fips[which(county$countynm=="miami-dade")] <- 12086
+# county$fips[which(county$countynm=="dekalb" & county$statenm=="georgia")] <- 13089
+# county$fips[which(county$countynm=="st clair" & county$statenm=="illinois")] <- 17163
+# county$fips[which(county$countynm=="mackinac" & county$statenm=="michigan")] <- 26097
+# county$fips[which(county$countynm=="st louis city" & county$decade<1992)] <- 29510
 
 ################################################################################
 
@@ -228,10 +350,10 @@ names(pres) <- c("statenm", "countynm",
 countyplus <- merge(countyplus, pres, by.x=c("statenm", "countynm", "con_raceYear"), by.y=c("statenm", "countynm", "pres_RaceDate"), all.x=T)
 
 # one county gets duplicated after this merge. Omit the duplicated copy.
-countyplus <- countyplus[which(!(countyplus$statenm=="virginia" & 
-                                   countyplus$countynm=="norfolk" & 
-                                   countyplus$con_raceYear==2020 & 
-                                   countyplus$pres_TotalVotes=="0")), ]
+# countyplus <- countyplus[which(!(countyplus$statenm=="virginia" & 
+#                                    countyplus$countynm=="norfolk" & 
+#                                    countyplus$con_raceYear==2020 & 
+#                                    countyplus$pres_TotalVotes=="0")), ]
 
 ################################################################################
 
@@ -433,7 +555,7 @@ countyplus <- merge(countyplus, census, by.x = c("fips", "decade"), by.y = c("fi
 ###
 
 for(i in 1:nrow(countyplus)) {
-
+  
   year <- countyplus$con_raceYear[i]
   county <- countyplus$countynm[i]
   cd <- countyplus$cd[i]
@@ -485,6 +607,13 @@ vars <- c("pres_totalvotes", "pres_repvotes", "pres_demvotes", "pres_othervotes"
           "gov_repvotes", "gov_demvotes", "gov_thirdvotes", "gov_othervotes",
           "pop_total", "pop_male", "pop_over65", "pop_white", "pop_black", "pop_spanishorigin")
 
+# if("pop_total.y" %in% names(countyplus)) {
+#   countyplus <- countyplus[, !names(countyplus) %in% grep("\\.y", names(countyplus), value=T)]
+#   nm <- names(countyplus)[grepl("\\.x", names(countyplus))]
+#   nm <- gsub("\\.x", "", nm)
+#   names(countyplus)[grepl("\\.x", names(countyplus))] <- nm
+# }
+
 for(i in vars) {
   
   countyplus[which(countyplus[,i]=="N/A"), i] <- 0
@@ -496,15 +625,13 @@ for(i in vars) {
   
 }
 
-write.csv(countyplus, "working/county_district_mapping.csv", row.names = F)
-
 adminvars <- c("statenm", "cd", "con_raceyear", "con_repcandidate", "con_demcandidate", "con_thirdcandidate", "con_repstatus", "con_demstatus", "con_thirdstatus",
                "con_repunopposed", "con_demunopposed", "con_repvotes", "con_demvotes", "con_thirdvotes", "con_othervotes", "con_pluralityvotes"
                #"pres_repcandidate", "pres_demcandidate", "pres_repstatus", "pres_demstatus",
                #"sen1_repcandidate", "sen1_demcandidate", "sen1_repstatus", "sen1_demstatus",
                #"sen2_repcandidate", "sen2_demcandidate", "sen2_repstatus", "sen2_demstatus",
                #"gov_repcandidate", "gov_demcandidate", "gov_repstatus", "gov_demstatus"
-               )
+)
 
 adminvarlist <- as.list(countyplus[, adminvars])
 
@@ -546,7 +673,7 @@ incumb$dem_incumb_dum <- ( incumb$con_dem_inc_count >0 ) * 1
 
 incumb <- incumb[, c("cd", "statenm", "con_raceyear", "dem_incumb_dum")]
 
-cddata <- merge(cddata, incumb, by.x=c("statenm", "cd", "con_raceYear"), by.y=c("statenm", "cd", "con_raceyear"), all.x=T)
+cddata <- merge(cddata, incumb, by.x=c("statenm", "cd", "con_raceyear"), by.y=c("statenm", "cd", "con_raceyear"), all.x=T)
 
 ###
 
@@ -592,7 +719,11 @@ cddata[, c("con_repcandidate", "con_demcandidate", "con_thirdcandidate")] <- app
 # dropping 19 cases in which incumbent and opponent coded as incumbent
 cddata <- cddata[which(!(cddata$con_repstatus=="Incumbent" & cddata$con_demstatus=="Incumbent")), ]
 
-write.csv(cddata, "working/condistrict_panel_full.csv", row.names=F)
+write.csv(cddata, "working/condistrict_panel_full_FULLGEO.csv", row.names=F)
+
+
+
+
 
 
 
