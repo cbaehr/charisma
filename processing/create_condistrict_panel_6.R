@@ -191,14 +191,15 @@ pres <- pres[which(!(pres$statenm=="alaska" & pres$RaceDate==2020 & pres$countyn
 drop <- (pres$statenm=="virginia" & pres$countynm=="norfolk" & pres$RaceDate==1960 & pres$TotalVotes=="8,936")
 keep <- which(pres$statenm=="virginia" & pres$countynm=="norfolk" & pres$RaceDate==1960 & pres$TotalVotes!="8,936")
 
-for(i in c("TotalVotes", "RepVotes", "DemVotes", "OtherVotes", "PluralityVotes")) {
+for(i in c("TotalVotes", "RepVotes", "DemVotes", "ThirdVotes", "OtherVotes", "PluralityVotes")) {
   pres[keep, i] <- gsub(",", "", pres[keep, i])
   pres[which(drop), i] <- gsub(",", "", pres[which(drop), i])
   pres[keep, i] <- pres[which(drop), i]
 }
 
-pres <- pres[which(!drop), ]
+
 pres$TotalVotes[keep] <- gsub(",", "", pres$TotalVotes[keep])
+pres <- pres[which(!drop), ]
 
 ###
 
@@ -215,13 +216,13 @@ pres$countynm[which(pres$statenm=="virginia" & pres$countynm=="norfolk city" & p
 # there are also several counties in Virginia that have no matches in a few years. No record of Manassas/Manassas Park prior to 1982
 
 pres <- pres[, c("statenm", "countynm", "RaceDate",
-                 "TotalVotes", "RepVotes", "DemVotes", "OtherVotes", "PluralityVotes", "RepVotesTotalPercent",
+                 "TotalVotes", "RepVotes", "DemVotes", "ThirdVotes", "OtherVotes", "PluralityVotes", "RepVotesTotalPercent",
                  "DemVotesTotalPercent", "OtherVotesTotalPercent", "RepVotesMajorPercent", "DemVotesMajorPercent",
                  "PluralityParty", "RepCandidate", "RepStatus", "DemCandidate", "DemStatus")]
 
 names(pres) <- c("statenm", "countynm",
                  paste0("pres_", c("RaceDate",
-                                   "TotalVotes", "RepVotes", "DemVotes", "OtherVotes", "PluralityVotes", "RepVotesTotalPercent",
+                                   "TotalVotes", "RepVotes", "DemVotes", "ThirdVotes", "OtherVotes", "PluralityVotes", "RepVotesTotalPercent",
                                    "DemVotesTotalPercent", "OtherVotesTotalPercent", "RepVotesMajorPercent", "DemVotesMajorPercent",
                                    "PluralityParty", "RepCandidate", "RepStatus", "DemCandidate", "DemStatus")))
 
@@ -479,7 +480,7 @@ countyplus$con_repunopposed[which(countyplus$con_demcandidate=="N/A" & countyplu
 
 sum(is.na(countyplus$unit_pop))
 
-vars <- c("pres_totalvotes", "pres_repvotes", "pres_demvotes", "pres_othervotes",
+vars <- c("pres_totalvotes", "pres_repvotes", "pres_demvotes", "pres_thirdvotes", "pres_othervotes",
           "sen1_repvotes", "sen1_demvotes", "sen1_thirdvotes", "sen1_othervotes",
           "sen2_repvotes", "sen2_demvotes", "sen2_thirdvotes", "sen2_othervotes",
           "gov_repvotes", "gov_demvotes", "gov_thirdvotes", "gov_othervotes",
@@ -546,7 +547,7 @@ incumb$dem_incumb_dum <- ( incumb$con_dem_inc_count >0 ) * 1
 
 incumb <- incumb[, c("cd", "statenm", "con_raceyear", "dem_incumb_dum")]
 
-cddata <- merge(cddata, incumb, by.x=c("statenm", "cd", "con_raceYear"), by.y=c("statenm", "cd", "con_raceyear"), all.x=T)
+cddata <- merge(cddata, incumb, by.x=c("statenm", "cd", "con_raceyear"), by.y=c("statenm", "cd", "con_raceyear"), all.x=T)
 
 ###
 
@@ -560,7 +561,7 @@ cddata$con_demshare <- cddata$con_demvotes / cddata$con_totalvotes
 cddata$con_demshare[which(cddata$con_demunopposed)] <- 1
 cddata$con_demshare[which(cddata$con_repunopposed)] <- 0
 
-cddata$pres_totalvotes <- cddata$pres_repvotes + cddata$pres_demvotes + cddata$pres_othervotes
+cddata$pres_totalvotes <- cddata$pres_repvotes + cddata$pres_demvotes + cddata$pres_thirdvotes + cddata$pres_othervotes
 
 cddata$pres_repshare <- cddata$pres_repvotes / cddata$pres_totalvotes
 cddata$pres_demshare <- cddata$pres_demvotes / cddata$pres_totalvotes

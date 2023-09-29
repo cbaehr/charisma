@@ -90,12 +90,15 @@ for(i in yrs) {
   }
 }
 
+pre <- aggregate(out$NAME, by=list(out$year, out$STATENAME, out$DISTRICT), FUN=length) |>
+  setNames(c("year", "state", "district", "n_units_pre"))
+
 out.df <- st_drop_geometry(out)
 write.csv(out.df, "/Users/christianbaehr/Desktop/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_FULLYGEO.csv", row.names = F)
 
 #################################################################################
 
-rm(list = setdiff(ls(), "out.df"))
+rm(list = setdiff(ls(), c("out.df", "pre")))
 
 out.df <- read.csv("/Users/christianbaehr/Desktop/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_FULLYGEO.csv",
                    stringsAsFactors = F)
@@ -354,6 +357,15 @@ countyplus <- merge(countyplus, pres, by.x=c("statenm", "countynm", "con_raceYea
 #                                    countyplus$countynm=="norfolk" & 
 #                                    countyplus$con_raceYear==2020 & 
 #                                    countyplus$pres_TotalVotes=="0")), ]
+
+countyplus$mergeid <- paste(countyplus$con_raceYear, countyplus$statenm, countyplus$countynm)
+pres$mergeid <- paste(pres$pres_RaceDate, pres$statenm, pres$countynm)
+
+sum(countyplus$mergeid %in% pres$mergeid)
+sum(pres$mergeid %in% countyplus$mergeid)
+
+View(t(pres$mergeid[!pres$mergeid %in% countyplus$mergeid]))
+View(t(countyplus$mergeid[!countyplus$mergeid %in% pres$mergeid]))
 
 ################################################################################
 
@@ -635,6 +647,25 @@ adminvars <- c("statenm", "cd", "con_raceyear", "con_repcandidate", "con_demcand
 
 adminvarlist <- as.list(countyplus[, adminvars])
 
+###
+
+post <- aggregate(countyplus$pres_repvotes, by=list(countyplus$decade, countyplus$statenm, countyplus$cd), FUN=function(x) sum(!is.na(x))) |>
+  setNames(c("year", "state", "district", "n_units_post"))
+
+pre$state <- tolower(pre$state)
+
+test <- merge(pre, post) |>
+  setNames(c("decade", "statenm", "cd", "n_units_pre", "n_units_post"))
+test$n_units_pre <- test$n_units_pre*5
+
+test$units_missing <- test$n_units_pre - test$n_units_post
+test$any_missing <- test$units_missing>0
+test$pct_missing <- test$units_missing / test$n_units_pre
+
+countyplus <- merge(countyplus, test)
+
+###
+vars <- c(vars, "any_missing")
 cddata <- aggregate(countyplus[, vars], 
                     by=adminvarlist, 
                     FUN=function(x) sum(x, na.rm=T))
