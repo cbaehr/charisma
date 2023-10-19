@@ -226,6 +226,21 @@ names(pres) <- c("statenm", "countynm",
                                    "DemVotesTotalPercent", "OtherVotesTotalPercent", "RepVotesMajorPercent", "DemVotesMajorPercent",
                                    "PluralityParty", "RepCandidate", "RepStatus", "DemCandidate", "DemStatus")))
 
+table(countyplus$con_raceYear)
+table(pres$pres_RaceDate)
+countyplus.temp <- countyplus[which(countyplus$con_raceYear %in% pres$pres_RaceDate), ]
+
+test <- merge(countyplus.temp, pres, by.x=c("statenm", "countynm", "con_raceYear"), by.y=c("statenm", "countynm", "pres_RaceDate"))
+
+countyplus.temp$mergeid <- paste(countyplus.temp$statenm, countyplus.temp$countynm, countyplus.temp$con_raceYear)
+pres$mergeid <- paste(pres$statenm, pres$countynm, pres$pres_RaceDate)
+
+test2 <- merge(countyplus.temp, pres, by="mergeid")
+nomatch <- countyplus.temp[which(!countyplus.temp$mergeid %in% pres$mergeid), c("statenm", "countynm", "con_raceYear", "cd")]
+write.csv(nomatch, "/Users/christianbaehr/Desktop/nonmatches_countydist_presCQ.csv", row.names = F)
+#View(pres[which(!pres$mergeid %in% countyplus.temp$mergeid), c("statenm", "countynm", "pres_RaceDate")])
+
+
 countyplus <- merge(countyplus, pres, by.x=c("statenm", "countynm", "con_raceYear"), by.y=c("statenm", "countynm", "pres_RaceDate"), all.x=T)
 
 # one county gets duplicated after this merge. Omit the duplicated copy.

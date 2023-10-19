@@ -93,17 +93,19 @@ for(i in yrs) {
 pre <- aggregate(out$NAME, by=list(out$year, out$STATENAME, out$DISTRICT), FUN=length) |>
   setNames(c("year", "state", "district", "n_units_pre"))
 
+
+
 out.df <- st_drop_geometry(out)
-write.csv(out.df, "/Users/christianbaehr/Desktop/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_FULLYGEO.csv", row.names = F)
+setwd("/Users/christianbaehr/Dropbox/charisma_project/data/")
+write.csv(out.df, "working/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_FULLYGEO.csv", row.names = F)
 
 #################################################################################
 
 rm(list = setdiff(ls(), c("out.df", "pre")))
 
-out.df <- read.csv("/Users/christianbaehr/Desktop/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_FULLYGEO.csv",
+out.df <- read.csv("working/condistrict_to_county_mapping_withcountynames_1952-2012_fips_added_FULLYGEO.csv",
                    stringsAsFactors = F)
 
-setwd("/Users/christianbaehr/Dropbox/charisma_project/data/")
 
 library(readxl)
 library(stringi)
@@ -295,62 +297,95 @@ countyplus <- merge(county, congress, by = c("statenm", "cd", "decade"))
 
 ################################################################################
 
-files <- paste0("original/elections/cq_president_county/", grep("president", list.files("original/elections/cq_president_county"), value=T))
-pres <- lapply(files, function(x) read.csv(x, stringsAsFactors = F, skip=2, fileEncoding = "cp1252"))
-pres <- do.call(rbind, pres)
+load("original/elections/Algara_Amlani_presidential_county_returns_1868_2020.Rdata")
+pres <- pres_elections_release
 
-pres <- pres[which(pres$Office=="President"),]
 
-pres$statenm <- tolower(pres$State)
-pres$countynm <- tolower(pres$Area)
-pres$countynm <- gsub("\\.", "", pres$countynm)
-pres$countynm <- trimws(pres$countynm)
-
-pres$RaceDate <- as.numeric(pres$RaceDate)
-pres$RaceDate <- as.numeric(substr(pres$RaceDate, 1, 4))
+countyplus$fips <- ifelse(nchar(countyplus$fips)==5, countyplus$fips, paste0("0", countyplus$fips))
+sum(countyplus$fips %in% pres_elections_release$fips)
 
 ###
 
-pres <- pres[which(!(pres$statenm=="alaska" & pres$RaceDate==2020 & pres$countynm=="election district 1" & pres$TotalVotes==0)), ]
+# files <- paste0("original/elections/cq_president_county/", grep("president", list.files("original/elections/cq_president_county"), value=T))
+# pres <- lapply(files, function(x) read.csv(x, stringsAsFactors = F, skip=2, fileEncoding = "cp1252"))
+# pres <- do.call(rbind, pres)
+# 
+# pres <- pres[which(pres$Office=="President"),]
+# 
+# pres$statenm <- tolower(pres$State)
+# pres$countynm <- tolower(pres$Area)
+# pres$countynm <- gsub("\\.", "", pres$countynm)
+# pres$countynm <- trimws(pres$countynm)
+# 
+# pres$RaceDate <- as.numeric(pres$RaceDate)
+# pres$RaceDate <- as.numeric(substr(pres$RaceDate, 1, 4))
+# 
+# ###
+# 
+# pres <- pres[which(!(pres$statenm=="alaska" & pres$RaceDate==2020 & pres$countynm=="election district 1" & pres$TotalVotes==0)), ]
+# 
+# drop <- (pres$statenm=="virginia" & pres$countynm=="norfolk" & pres$RaceDate==1960 & pres$TotalVotes=="8,936")
+# keep <- which(pres$statenm=="virginia" & pres$countynm=="norfolk" & pres$RaceDate==1960 & pres$TotalVotes!="8,936")
+# 
+# for(i in c("TotalVotes", "RepVotes", "DemVotes", "OtherVotes", "PluralityVotes")) {
+#   pres[keep, i] <- gsub(",", "", pres[keep, i])
+#   pres[which(drop), i] <- gsub(",", "", pres[which(drop), i])
+#   pres[keep, i] <- pres[which(drop), i]
+# }
+# 
+# pres <- pres[which(!drop), ]
+# pres$TotalVotes[keep] <- gsub(",", "", pres$TotalVotes[keep])
+# 
+# ###
+# 
+# pres <- pres[which(pres$RaceDate>=1972), ]
+# 
+# pres$countynm[which(pres$statenm=="virginia" & pres$countynm=="norfolk city" & pres$RaceDate>=2016)] <- "norfolk"
+# 
+# # no match for Hawaii Kalawao or Maui or Nevada Ormsby
+# # armstrong county in South Dakota is defunct, has no match
+# # la paz county in Arizona was created in 1983, not present in county data until 1992. Missing matches for 1984, 1988.
+# # milton county georgia does not appear to exist anymore
+# # no match for assumption parish Louisiana 1982
+# # presidential voting data considers Kansas City to be its own county after 2000. However Kansas city is actually a part of several counties
+# # there are also several counties in Virginia that have no matches in a few years. No record of Manassas/Manassas Park prior to 1982
 
-drop <- (pres$statenm=="virginia" & pres$countynm=="norfolk" & pres$RaceDate==1960 & pres$TotalVotes=="8,936")
-keep <- which(pres$statenm=="virginia" & pres$countynm=="norfolk" & pres$RaceDate==1960 & pres$TotalVotes!="8,936")
-
-for(i in c("TotalVotes", "RepVotes", "DemVotes", "OtherVotes", "PluralityVotes")) {
-  pres[keep, i] <- gsub(",", "", pres[keep, i])
-  pres[which(drop), i] <- gsub(",", "", pres[which(drop), i])
-  pres[keep, i] <- pres[which(drop), i]
-}
-
-pres <- pres[which(!drop), ]
-pres$TotalVotes[keep] <- gsub(",", "", pres$TotalVotes[keep])
-
-###
-
-pres <- pres[which(pres$RaceDate>=1972), ]
-
-pres$countynm[which(pres$statenm=="virginia" & pres$countynm=="norfolk city" & pres$RaceDate>=2016)] <- "norfolk"
-
-# no match for Hawaii Kalawao or Maui or Nevada Ormsby
-# armstrong county in South Dakota is defunct, has no match
-# la paz county in Arizona was created in 1983, not present in county data until 1992. Missing matches for 1984, 1988.
-# milton county georgia does not appear to exist anymore
-# no match for assumption parish Louisiana 1982
-# presidential voting data considers Kansas City to be its own county after 2000. However Kansas city is actually a part of several counties
-# there are also several counties in Virginia that have no matches in a few years. No record of Manassas/Manassas Park prior to 1982
-
-pres <- pres[, c("statenm", "countynm", "RaceDate",
-                 "TotalVotes", "RepVotes", "DemVotes", "OtherVotes", "PluralityVotes", "RepVotesTotalPercent",
+pres$OtherVotes <- pres$raw_county_vote_totals - (pres$republican_raw_votes + pres$democratic_raw_votes)
+pres$PluralityVotes <- NA
+pres$RepVotesTotalPercent <- pres$republican_raw_votes / pres$raw_county_vote_totals
+pres$DemVotesTotalPercent <- pres$democratic_raw_votes / pres$raw_county_vote_totals
+pres$OtherVotesTotalPercent <- pres$OtherVotes / pres$raw_county_vote_totals
+pres$RepVotesMajorPercent <- pres$republican_raw_votes / (pres$republican_raw_votes + pres$democratic_raw_votes)
+pres$DemVotesMajorPercent <- pres$democratic_raw_votes / (pres$republican_raw_votes + pres$democratic_raw_votes)
+pres$PluralityParty <- ifelse(pres$democratic_raw_votes > pres$republican_raw_votes, "Democrat", "Republican")
+pres$DemStatus <- NA
+pres$RepStatus <- NA
+pres <- pres[, c("state", "county_name", "fips", "election_year",
+                 "raw_county_vote_totals", "republican_raw_votes", "democratic_raw_votes", "OtherVotes", "PluralityVotes", "RepVotesTotalPercent",
                  "DemVotesTotalPercent", "OtherVotesTotalPercent", "RepVotesMajorPercent", "DemVotesMajorPercent",
-                 "PluralityParty", "RepCandidate", "RepStatus", "DemCandidate", "DemStatus")]
+                 "PluralityParty", "dem_nominee", "RepStatus", "rep_nominee", "DemStatus")]
 
-names(pres) <- c("statenm", "countynm",
+names(pres) <- c("statenm", "countynm", "fips",
                  paste0("pres_", c("RaceDate",
                                    "TotalVotes", "RepVotes", "DemVotes", "OtherVotes", "PluralityVotes", "RepVotesTotalPercent",
                                    "DemVotesTotalPercent", "OtherVotesTotalPercent", "RepVotesMajorPercent", "DemVotesMajorPercent",
                                    "PluralityParty", "RepCandidate", "RepStatus", "DemCandidate", "DemStatus")))
 
-countyplus <- merge(countyplus, pres, by.x=c("statenm", "countynm", "con_raceYear"), by.y=c("statenm", "countynm", "pres_RaceDate"), all.x=T)
+
+pres <- pres[which(pres$pres_RaceDate>=1972), ]
+
+#test <- countyplus[which(countyplus$con_raceYear %in% seq(1972, 2020, 4)), ]
+#matcha <- paste(test$fips, test$con_raceYear)
+#matchb <- paste(pres$fips, pres$pres_RaceDate)
+
+#sum(matcha %in% matchb)
+#sum(matchb %in% matcha)
+
+countyplus <- merge(countyplus, pres, by.x = c("con_raceYear", "fips", "statenm", "countynm"), by.y = c("pres_RaceDate", "fips", "statenm", "countynm"),
+                    all.x = T)
+
+#View(data.frame(matcha[!matcha %in% matchb]))
+#View(data.frame(matchb[!matchb %in% matcha]))
 
 # one county gets duplicated after this merge. Omit the duplicated copy.
 # countyplus <- countyplus[which(!(countyplus$statenm=="virginia" & 
@@ -358,14 +393,6 @@ countyplus <- merge(countyplus, pres, by.x=c("statenm", "countynm", "con_raceYea
 #                                    countyplus$con_raceYear==2020 & 
 #                                    countyplus$pres_TotalVotes=="0")), ]
 
-countyplus$mergeid <- paste(countyplus$con_raceYear, countyplus$statenm, countyplus$countynm)
-pres$mergeid <- paste(pres$pres_RaceDate, pres$statenm, pres$countynm)
-
-sum(countyplus$mergeid %in% pres$mergeid)
-sum(pres$mergeid %in% countyplus$mergeid)
-
-View(t(pres$mergeid[!pres$mergeid %in% countyplus$mergeid]))
-View(t(countyplus$mergeid[!countyplus$mergeid %in% pres$mergeid]))
 
 ################################################################################
 
@@ -633,8 +660,8 @@ for(i in vars) {
   
   countyplus[,i] <- as.numeric(countyplus[,i])
   
-  countyplus[,i] <- countyplus[,i] * countyplus$unit_weight
-  
+  #countyplus[,i] <- countyplus[,i] * countyplus$unit_weight
+  countyplus[,i] <- countyplus[,i] * countyplus$cty_prop
 }
 
 adminvars <- c("statenm", "cd", "con_raceyear", "con_repcandidate", "con_demcandidate", "con_thirdcandidate", "con_repstatus", "con_demstatus", "con_thirdstatus",
