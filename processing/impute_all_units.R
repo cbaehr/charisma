@@ -373,6 +373,7 @@ names(pres) <- c("statenm", "countynm", "fips",
 
 
 pres <- pres[which(pres$pres_RaceDate>=1972), ]
+pres <- pres[, !names(pres) %in% c("statenm", "countynm")]
 
 #test <- countyplus[which(countyplus$con_raceYear %in% seq(1972, 2020, 4)), ]
 #matcha <- paste(test$fips, test$con_raceYear)
@@ -381,7 +382,11 @@ pres <- pres[which(pres$pres_RaceDate>=1972), ]
 #sum(matcha %in% matchb)
 #sum(matchb %in% matcha)
 
-countyplus <- merge(countyplus, pres, by.x = c("con_raceYear", "fips", "statenm", "countynm"), by.y = c("pres_RaceDate", "fips", "statenm", "countynm"),
+#pres$statenm <- tolower(state.name[match(pres$statenm, state.abb)])
+
+# countyplus <- merge(countyplus, pres, by.x = c("con_raceYear", "fips", "statenm", "countynm"), by.y = c("pres_RaceDate", "fips", "statenm", "countynm"),
+#                     all.x = T)
+countyplus <- merge(countyplus, pres, by.x = c("con_raceYear", "fips"), by.y = c("pres_RaceDate", "fips"),
                     all.x = T)
 
 #View(data.frame(matcha[!matcha %in% matchb]))
@@ -660,8 +665,8 @@ for(i in vars) {
   
   countyplus[,i] <- as.numeric(countyplus[,i])
   
-  #countyplus[,i] <- countyplus[,i] * countyplus$unit_weight
-  countyplus[,i] <- countyplus[,i] * countyplus$cty_prop
+  countyplus[,i] <- countyplus[,i] * countyplus$unit_weight
+  #countyplus[,i] <- countyplus[,i] * countyplus$cty_prop
 }
 
 adminvars <- c("statenm", "cd", "con_raceyear", "con_repcandidate", "con_demcandidate", "con_thirdcandidate", "con_repstatus", "con_demstatus", "con_thirdstatus",
