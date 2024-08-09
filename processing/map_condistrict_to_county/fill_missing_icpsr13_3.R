@@ -11,6 +11,8 @@ library(haven)
 
 sf_use_s2(F)
 
+rm(list = ls())
+
 # pull in the ICPSR 1952-82 congressional district-county map from Rocios APSR replication data
 dat <- data.frame(read_dta("original/census_redistricting/icpsr13_final.dta")) 
 # order by year - will reduce the number of times we have to load senate data in to the loop
@@ -52,6 +54,11 @@ county <- st_read("original/GIS/US_AtlasHCB_Counties_Gen0001/US_HistCounties_Gen
 # create area variable in squared km
 county$county_area <- as.numeric(st_area(county$geometry)) / 1000000
 
+# drop periods from county names to match up with census naming
+county$NAME <- gsub("\\.", "", county$NAME)
+county$NAME <- toupper(county$NAME) # all county names to uppercase
+
+dat <- dat[which(!(dat$statenm=="Virginia" & dat$countynm=="BEDFORD CITY" & dat$))]
 dat$countynm[which(dat$countynm=="BREVARD/ST LUCIE" & dat$year<1986)] <- "BREVARD" # need to change ICPSR for this one. Dependent on the year
 
 county$NAME[which(county$NAME=="Baltimore City (IC)")] <- "BALTIMORE CITY"
@@ -61,10 +68,36 @@ county$NAME[which(county$NAME=="Lynchburg (IC)")] <- "LYNCHBURG"
 county$NAME[which(county$NAME=="Virginia Beach (IC)")] <- "VIRGINIA BEACH"
 county$NAME[which(county$NAME=="MANASSAS PARK (IC)")] <- "MANASSAS"
 county$NAME[which(county$NAME=="DOÑA ANA")] <- "DONA ANA"
+county$NAME[which(county$STATE_TERR=="Michigan" & county$NAME=="MACKINAC")] <- "MACKINAC/MICHILIM"
+county$NAME[which(county$STATE_TERR=="Wisconsin" & county$NAME=="BAYFIELD")] <- "BAYFIELD/LA POINT"
+county$NAME[which(county$STATE_TERR=="Iowa" & county$NAME=="LYON")] <- "LYON/BUNCOMBE"
+county$NAME[which(county$STATE_TERR=="Iowa" & county$NAME=="O'BRIEN")] <- "O BRIEN"
+county$NAME[which(county$STATE_TERR=="Kansas" & county$NAME=="NEOSHO")] <- "NEOSHO/DORN"
+county$NAME[which(county$STATE_TERR=="South Dakota" & county$NAME=="ARMSTRONG (EXT)")] <- "ARMSTRONG"
+county$NAME[which(county$STATE_TERR=="South Dakota" & county$NAME=="WASHABAUGH (EXT)")] <- "WASHABAUGH"
+county$NAME[which(county$STATE_TERR=="Virginia" & county$NAME=="ALEXANDRIA (IC)")] <- "ALEXANDRIA CITY"
+county$NAME[which(county$STATE_TERR=="Virginia" & county$NAME=="ARLINGTON")] <- "ARLINGTON/ALEXAND"
+county$NAME[which(county$STATE_TERR=="Virginia" & county$NAME=="Bedford (IC)")] <- "BEDFORD CITY"
+county$NAME[which(county$STATE_TERR=="Virginia" & county$NAME=="Bristol (IC)")] <- "BRISTOL"
 
-# drop periods from county names to match up with census naming
-county$NAME <- gsub("\\.", "", county$NAME)
-county$NAME <- toupper(county$NAME) # all county names to uppercase
+
+
+## this county was created in 1959 -- well call it 1952 so we can include it in 1952 decade
+county$START_N[which(county$STATE_TERR == "Wisconsin" & county$NAME=="MENOMINEE")] <- 19520101
+county$START_N[which(county$STATE_TERR == "Virginia" & county$NAME=="BEDFORD CITY" & county$END_N=="19930630")] <- 19520101
+
+###
+
+# 1289
+
+dat$countynm[i]
+dat$statenm[i]
+dat$year[i]
+
+#View(county[which(county$STATE_TERR=="South Dakota" & as.numeric(substr(county$END_N, 1, 4))>=dat$year[1950]), ])
+#View(county[which(county$STATE_TERR=="Virginia" & county$END_N>19520101 & county$START_N<19520101), ])
+
+###
 
 # running variable
 out <- 1
@@ -86,9 +119,11 @@ for( i in 1:nrow(dat) ) {
       cqyear <- cq[ which(as.character(year) == cq$raceYear), ]
     } 
     
+    if (!dat$countynm[i] %in% county$NAME) {stop("MAY NEED TO ADJUST COUNTY NAME")}
+    ctymatch <- county[which(county$STATE_TERR==dat$statenm[i] & county$NAME==dat$countynm[i] & (county$START_N<=yearlong & county$END_N>=yearlong ) ), ]
     if(dat$cd[i] %in% c(902, 903, 904, 905, 906, 907, 914, 918, 999) ) { # if congressional district is either "missing" (999) or county is in multiple CDs (9xx)
       
-      ctymatch <- county[which(county$STATE_TERR==dat$statenm[i] & county$NAME==dat$countynm[i] & (county$START_N<=yearlong & county$END_N>=yearlong ) ), ] # find the corresponding county in county shapefile, based on state name county name and year
+      #ctymatch <- county[which(county$STATE_TERR==dat$statenm[i] & county$NAME==dat$countynm[i] & (county$START_N<=yearlong & county$END_N>=yearlong ) ), ] # find the corresponding county in county shapefile, based on state name county name and year
       int <- st_intersection(congyear, ctymatch) # intersect the matching county feature with the congressional district shapefile to identify which CDs the county is in
       int <- int[which(int$STATENAME==int$STATE_TERR), ] # only keep matches that are from the same state as the CD
       int$unit_area <- as.numeric(st_area(int$geometry)) / 1000000 # area in square kilometers of the county -CD unit
@@ -138,7 +173,7 @@ for( i in 1:nrow(dat) ) {
     } else if (!dat$cd[i] %in% cqyear$Area[cqyear$State==dat$statenm[i]] & !(dat$cd[i] %in% c(98, 99)) ) { # cases where the district number according to Census does not exist in the CQ data (esp. Los Angeles with district 67)
       
       if (!dat$countynm[i] %in% county$NAME) {stop("MAY NEED TO ADJUST COUNTY NAME")}
-      ctymatch <- county[which(county$STATE_TERR==dat$statenm[i] & county$NAME==dat$countynm[i] & (county$START_N<=yearlong & county$END_N>=yearlong ) ), ]
+      #ctymatch <- county[which(county$STATE_TERR==dat$statenm[i] & county$NAME==dat$countynm[i] & (county$START_N<=yearlong & county$END_N>=yearlong ) ), ]
       
       int <- st_intersection(congyear, ctymatch)
       int <- int[which(int$STATENAME==int$STATE_TERR), ]
@@ -170,11 +205,13 @@ for( i in 1:nrow(dat) ) {
       row$county_prop <- 1 # not split amongst more than 1 district, so these counties must be entirely contained
     }
     
+    row$county_area <- st_area(ctymatch$geometry)
     datnew[[i]] <- row
     
     out <- i
     
   }
+  print(i)
 }
 
 datout <- do.call(rbind, datnew)
