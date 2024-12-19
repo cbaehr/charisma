@@ -1,8 +1,11 @@
 
-## Fix errors in FIPS codes. These FIPS codes will help merge the district-county
-## map with county population data later on.
+# Author: Christian Baehr
+# Date: 8/9/2024
+# Description: Fix errors in FIPS codes. These FIPS codes will be used to merge 
+#              the county map with county population data later on.
 
-setwd("/Users/christianbaehr/Dropbox/charisma_project/data/original/census_redistricting/")
+#setwd("/Users/christianbaehr/Dropbox/charisma_project/data/original/census_redistricting/")
+setwd("/Users/christianbaehr/Dropbox/Charisma_Data/")
 
 fips <- read.csv("fips_codes.csv", stringsAsFactors = F)
 fips <- fips[!is.na(fips$state), ]
